@@ -24,6 +24,7 @@ import {
 	normalizeModelsCatalog,
 	normalizeUnified,
 	parseDataset,
+	benchmarkProxyUrl,
 	readDataset,
 	refreshBenchmarks,
 	refreshNow,
@@ -594,4 +595,11 @@ test("the reported Jev case: a zero-probability model no longer wins on benchmar
 		model[`${decision.entry?.provider}/${decision.entry?.id}`] > 0,
 		"the routed model is one the classifier actually endorsed",
 	);
+});
+
+test("benchmarkProxyUrl: \"direct\" means never proxy even when settings/env proxies are set", () => {
+	const env = (name: string) => (name === "https_proxy" ? "http://env-proxy:3128" : undefined);
+	assert.equal(benchmarkProxyUrl("direct", env), null);
+	assert.equal(benchmarkProxyUrl("", env), null);
+	assert.equal(benchmarkProxyUrl("http://explicit:8080", env), "http://explicit:8080");
 });

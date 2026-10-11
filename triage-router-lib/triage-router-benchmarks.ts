@@ -568,6 +568,15 @@ async function httpGetJson(
  * Fetch + normalize + persist. On any failure the previous cache is kept and
  * the error is returned (never throws): callers log and continue routing.
  */
+export function benchmarkProxyUrl(
+	proxyUrl: string | null,
+	env: (name: string) => string | undefined = (name) => process.env[name],
+): string | null {
+	return proxyUrl != null
+		? normalizeProxy(proxyUrl)
+		: (resolveProxyUrl(null) ?? env("https_proxy") ?? env("HTTPS_PROXY") ?? null);
+}
+
 export async function refreshBenchmarks(
 	config: BenchmarkConfig,
 	ids: string[],
@@ -576,7 +585,7 @@ export async function refreshBenchmarks(
 	const env = deps.env ?? ((name: string) => process.env[name]);
 	// Proxy: explicit "direct" means never; otherwise settings.json httpProxy,
 	// then env proxies (shared resolution with the classifier backends).
-	const proxyUrl = normalizeProxy(config.proxyUrl) ?? resolveProxyUrl(null) ?? env("https_proxy") ?? env("HTTPS_PROXY") ?? null;
+	const proxyUrl = benchmarkProxyUrl(config.proxyUrl, env);
 	try {
 		let dataset: BenchmarkDataset;
 		if (config.source === "openrouter-models") {
