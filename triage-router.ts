@@ -748,7 +748,7 @@ export function validateConfig(raw: unknown): RouterConfig {
 	return config;
 }
 
-let cachedConfig: { mtimeMs: number; config: RouterConfig } | null = null;
+let cachedConfig: { path: string; mtimeMs: number; config: RouterConfig } | null = null;
 let configOverrideForTests: RouterConfig | null = null;
 
 /** Test hook: make loadConfig() (and therefore route()) use a fixed config
@@ -762,10 +762,10 @@ export function loadConfig(path: string = CONFIG_PATH): RouterConfig {
 	if (configOverrideForTests) return configOverrideForTests;
 	try {
 		const mtimeMs = statSync(path).mtimeMs;
-		if (cachedConfig?.mtimeMs === mtimeMs) return cachedConfig.config;
+		if (cachedConfig?.path === path && cachedConfig.mtimeMs === mtimeMs) return cachedConfig.config;
 		const raw = JSON.parse(readFileSync(path, "utf8"));
 		const config = validateConfig(raw);
-		cachedConfig = { mtimeMs, config };
+		cachedConfig = { path, mtimeMs, config };
 		for (const problem of config.problems) console.error(`${LOG_PREFIX} config: ${problem}`);
 		return config;
 	} catch (err) {

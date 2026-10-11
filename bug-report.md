@@ -130,7 +130,7 @@ When the pick came from benchmark scoring (`rule: "scored"`), `confidence` still
 
 ---
 
-## B10 · Low — `loadConfig` cache is keyed by mtime only
+## B10 · Low — `loadConfig` cache is keyed by mtime only ✅ fixed
 
 **Location:** `triage-router.ts`, `loadConfig()`.
 

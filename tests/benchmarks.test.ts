@@ -38,7 +38,7 @@ import {
 } from "../triage-router-lib/triage-router-benchmarks.ts";
 import { setFetchForTests, type FetchLike } from "../triage-router-lib/triage-router-openrouter.ts";
 import { testConfig } from "./fixtures.ts";
-import { decide, validateConfig, type ModelEntry } from "../triage-router.ts";
+import { decide, loadConfig, validateConfig, type ModelEntry } from "../triage-router.ts";
 
 let dir: string;
 
@@ -678,4 +678,21 @@ test("free (zero-price) models score 1.0 on the cost axis, not the missing-price
 	assert.equal(costOf["free"], 1, "free is the cheapest tier");
 	assert.equal(costOf["cheap"], 1, "cheapest paid model ties at the axis cap");
 	assert.ok(costOf["pricey"] < 1, "pricier model scores below the cheapest");
+});
+
+test("loadConfig caches per path, not mtime alone", () => {
+	const dir2 = mkdtempSync(join(tmpdir(), "laya-cfg-"));
+	try {
+		const a = join(dir2, "a.json");
+		const b = join(dir2, "b.json");
+		writeFileSync(a, JSON.stringify({ models: [{ provider: "p", id: "m-a", description: "a" }] }));
+		writeFileSync(b, JSON.stringify({ models: [{ provider: "p", id: "m-b", description: "b" }] }));
+		const t = new Date("2026-01-01T00:00:00Z").getTime();
+		utimesSync(a, t, t);
+		utimesSync(b, t, t);
+		assert.equal(loadConfig(a).models[0].id, "m-a");
+		assert.equal(loadConfig(b).models[0].id, "m-b", "same mtime but different path must not collide");
+	} finally {
+		rmSync(dir2, { recursive: true, force: true });
+	}
 });
