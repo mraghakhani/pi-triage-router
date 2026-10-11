@@ -28,6 +28,24 @@ pi --model laya/auto -p "reply ok"
 
 Remove it with `pi remove git:github.com/mraghakhani/pi-triage-router`.
 
+#### If install fails on `linux/x64`
+
+`onnxruntime-node` (a transitive dependency of `@receptron/laya`) has a
+postinstall that downloads CUDA/GPU provider libraries from nuget.org — and
+`linux/x64` is the **only** platform it does this for. It needs direct internet
+access, so on a restricted or proxied network the download dies with
+`socket hang up` and aborts the whole install.
+
+That is safe to skip: the CPU binaries every platform needs ship inside the
+npm tarball, and Laya runs CPU inference. This package therefore **denies**
+that script via `allowScripts` in `package.json`, and ships a `.npmrc` that
+tells the script to self-skip if it does run (the two cover different npm
+generations). If neither applies, set the flag explicitly:
+
+```sh
+ONNXRUNTIME_NODE_INSTALL=skip pi install git:github.com/mraghakhani/pi-triage-router
+```
+
 ### Where files live
 
 Sources land in different directories (`git:` under `~/.pi/agent/git/...`,
