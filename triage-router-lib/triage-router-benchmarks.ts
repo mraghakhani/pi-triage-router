@@ -214,6 +214,14 @@ function emptyMetrics(match: ModelBenchmarkMetrics["match"]): ModelBenchmarkMetr
 
 const DATED_SLUG_RE = /^(.*)-(\d{8}|\d{4})$/;
 
+/** `-MMDD` suffixes must be real calendar dates, not arbitrary 4-digit tails
+ * like `-2025` (a year) or `-1234` that would otherwise false-match. */
+function isValidMMDD(digits: string): boolean {
+	const month = Number(digits.slice(0, 2));
+	const day = Number(digits.slice(2, 4));
+	return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
 /**
  * Resolve a config model id to a benchmark permaslug: exact match, else a
  * trailing release date is stripped (`-YYYYMMDD`, or `-MMDD` interpreted with
@@ -225,7 +233,7 @@ export function resolveSlug(id: string, slug: string, datasetYear?: number): "ex
 	const m = DATED_SLUG_RE.exec(slug);
 	if (!m || m[1] !== id) return null;
 	if (m[2].length === 8) return "dated";
-	if (m[2].length === 4 && datasetYear) return "dated";
+	if (m[2].length === 4 && datasetYear && isValidMMDD(m[2])) return "dated";
 	return null;
 }
 

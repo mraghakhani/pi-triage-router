@@ -120,6 +120,9 @@ test("resolveSlug: exact, dated, and never family-prefix", () => {
 	assert.equal(resolveSlug("z-ai/glm-5.3", "z-ai/glm-5.3-flash-20260826", 2026), null, "flash is a different model");
 	assert.equal(resolveSlug("z-ai/glm-5.3", "z-ai/glm-5.3-flash", 2026), null);
 	assert.equal(resolveSlug("qwen/qwen3.8-max", "qwen/qwen3.5", 2026), null);
+	assert.equal(resolveSlug("gpt-5", "gpt-5-2025", 2026), null, "4-digit suffix that is not MMDD (a year) must not match");
+	assert.equal(resolveSlug("gpt-5", "gpt-5-1234", 2026), null, "month 12/day 34 is not a calendar date");
+	assert.equal(resolveSlug("gpt-5", "gpt-5-0831", 2026), "dated", "real MMDD still matches");
 });
 
 test("normalizeUnified resolves variants, winners, and every metric group", () => {

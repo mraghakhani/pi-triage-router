@@ -78,7 +78,7 @@ When `request.state` already exists (model `X`) and the override (or direct-fall
 
 ---
 
-## B5 · Low — `resolveSlug` matches 4-digit suffixes that are not MMDD dates
+## B5 · Low — `resolveSlug` matches 4-digit suffixes that are not MMDD dates ✅ fixed
 
 **Location:** `triage-router-lib/triage-router-benchmarks.ts` — `DATED_SLUG_RE = /^(.*)-(\d{8}|\d{4})$/`, `resolveSlug()`, `slugDateRank()`.
 
