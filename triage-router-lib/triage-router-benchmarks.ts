@@ -424,6 +424,7 @@ function mergeOpenrouter(
 	asOf: string | null,
 ): void {
 	for (const [id, byGroup] of groups) {
+		const researchMeans: number[] = [];
 		for (const [benchmarkType, rows] of byGroup) {
 			if (!rows.length) continue;
 			const target = models[id];
@@ -444,13 +445,16 @@ function mergeOpenrouter(
 				noteSource(target, "openrouter");
 			} else if (benchmarkType.startsWith("search_")) {
 				if (accuracies.length) {
-					const mean = accuracies.reduce((a, b) => a + b, 0) / accuracies.length;
-					target.research = target.research === null ? mean : (target.research + mean) / 2;
+					researchMeans.push(accuracies.reduce((a, b) => a + b, 0) / accuracies.length);
 				}
 				target.match = target.sources.length ? target.match : DATED_SLUG_RE.test(rows[0].model_permaslug ?? "") ? "dated" : "exact";
 				if (stamp) target.updatedAt = target.updatedAt && target.updatedAt > stamp ? target.updatedAt : stamp;
 				noteSource(target, "openrouter");
 			}
+		}
+		// Equal weight per search_* benchmark type, independent of row order.
+		if (researchMeans.length) {
+			models[id].research = researchMeans.reduce((a, b) => a + b, 0) / researchMeans.length;
 		}
 	}
 }

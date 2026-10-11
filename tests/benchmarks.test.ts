@@ -696,3 +696,19 @@ test("loadConfig caches per path, not mtime alone", () => {
 		rmSync(dir2, { recursive: true, force: true });
 	}
 });
+
+test("research metric is an equal-weight mean, independent of row order", () => {
+	const types = ["search_hle", "search_browsecomp", "search_qa"];
+	const rowsFor = (values: [number, number, number]) =>
+		types.map((benchmark_type, i) => ({
+			source: "openrouter",
+			model_permaslug: "order/model",
+			benchmark_type,
+			accuracy: values[i],
+			last_run_timestamp: "2026-09-01T00:00:00Z",
+		}));
+	const a = normalizeUnified(rowsFor([0.9, 0.5, 0.1]), META, "2026-10-10T00:00:00Z", "https://openrouter.ai/api/v1/benchmarks", ["order/model"]);
+	const b = normalizeUnified(rowsFor([0.1, 0.5, 0.9]), META, "2026-10-10T00:00:00Z", "https://openrouter.ai/api/v1/benchmarks", ["order/model"]);
+	assert.equal(a.models["order/model"].research, 0.5, "equal weight per search_* type");
+	assert.equal(a.models["order/model"].research, b.models["order/model"].research, "row order must not change the mean");
+});

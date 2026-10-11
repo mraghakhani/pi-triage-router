@@ -159,7 +159,7 @@ The load promise settles to `null` on failure and `getLaya` returns it for the r
 
 ---
 
-## B13 · Low — `mergeOpenrouter` research metric is an order-sensitive running average
+## B13 · Low — `mergeOpenrouter` research metric is an order-sensitive running average ✅ fixed
 
 **Location:** `triage-router-lib/triage-router-benchmarks.ts`, `mergeOpenrouter()`.
 
