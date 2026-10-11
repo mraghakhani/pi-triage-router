@@ -1,0 +1,121 @@
+{
+	"fetchedAt": "2026-10-09T18:36:46.823Z",
+	"source": "openrouter",
+	"sourceUrl": "https://openrouter.ai/api/v1/benchmarks",
+	"asOf": "2026-10-09T12:00:19.671Z",
+	"models": {
+		"deepseek/deepseek-v4-flash": {
+			"coding": 69.1,
+			"reasoning": 34.3,
+			"agentic": 41,
+			"arena": 1233,
+			"gpqa": 0.8625138888888889,
+			"taskSuccess": 0.7340741111111111,
+			"costPerTask": 0.00916024,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena",
+				"openrouter"
+			]
+		},
+		"z-ai/glm-5.3-flash": {
+			"coding": 71.5,
+			"reasoning": 41.8,
+			"agentic": 50.9,
+			"arena": 1287,
+			"gpqa": 0.9090909999999999,
+			"taskSuccess": 0.7,
+			"costPerTask": 0.00357748,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena",
+				"openrouter"
+			]
+		},
+		"z-ai/glm-5.3": {
+			"coding": 74.8,
+			"reasoning": 44.8,
+			"agentic": 53.1,
+			"arena": 1313,
+			"gpqa": 0.823232,
+			"taskSuccess": 0.76,
+			"costPerTask": 0.01597332,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena",
+				"openrouter"
+			]
+		},
+		"deepseek/deepseek-v4-pro": {
+			"coding": 68.8,
+			"reasoning": 36,
+			"agentic": 41.3,
+			"arena": 1244,
+			"gpqa": 0.8975330208728654,
+			"taskSuccess": 0.7695237142857143,
+			"costPerTask": 0.10013912285714285,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena",
+				"openrouter"
+			]
+		},
+		"qwen/qwen3.8-max": {
+			"coding": 76.2,
+			"reasoning": 45.4,
+			"agentic": 56,
+			"arena": 1298,
+			"gpqa": null,
+			"taskSuccess": null,
+			"costPerTask": null,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena"
+			]
+		},
+		"xiaomi/mimo-v2.5": {
+			"coding": 56.8,
+			"reasoning": 25.2,
+			"agentic": 15.8,
+			"arena": 1263,
+			"gpqa": 0.7537275714285715,
+			"taskSuccess": 0.7126667,
+			"costPerTask": 0.00856998,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-09T12:00:19.671Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"design-arena",
+				"openrouter"
+			]
+		}
+	}
+}

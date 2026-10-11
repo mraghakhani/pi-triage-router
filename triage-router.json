@@ -1,0 +1,118 @@
+{
+  "models": [
+    {
+      "provider": "litellm",
+      "id": "deepseek/deepseek-v4-flash",
+      "description": "Simple questions, explanations, small fixes, and routine code edits.",
+      "priceIn": 0.01,
+      "priceOut": 1.28
+    },
+    {
+      "provider": "litellm",
+      "id": "z-ai/glm-5.3-flash",
+      "description": "Routine coding and debugging needing a few connected reasoning steps.",
+      "priceIn": 0.15,
+      "priceOut": 0.5
+    },
+    {
+      "provider": "litellm",
+      "id": "z-ai/glm-5.3",
+      "description": "Multi-file changes, larger refactors, and performance-sensitive engineering.",
+      "priceIn": 0.04,
+      "priceOut": 4.8
+    },
+    {
+      "provider": "litellm",
+      "id": "deepseek/deepseek-v4-pro",
+      "description": "Balanced agentic workloads; strong tau2 score at mid price.",
+      "priceIn": 0.3,
+      "priceOut": 0.59
+    },
+    {
+      "provider": "litellm",
+      "id": "deepseek/deepseek-v4.1-flash",
+      "description": "Agentic tool use when v4-flash underperforms; newer flash generation.",
+      "priceIn": 0.3,
+      "priceOut": 1.2
+    },
+    {
+      "provider": "litellm",
+      "id": "deepseek/deepseek-v4-pro-0813",
+      "description": "Long-duration deep agent runs that need sustained quality across steps.",
+      "priceIn": 0.66,
+      "priceOut": 1.98
+    },
+    {
+      "provider": "litellm",
+      "id": "xiaomi/mimo-v2.6-flash",
+      "description": "Cheap long agent trajectories; slow wall-clock per task.",
+      "priceIn": 0.14,
+      "priceOut": 0.28
+    },
+    {
+      "provider": "litellm",
+      "id": "xiaomi/mimo-v2.6-pro",
+      "description": "Very long horizon tasks needing durable multi-step performance.",
+      "priceIn": 0.44,
+      "priceOut": 0.87
+    },
+    {
+      "provider": "litellm",
+      "id": "meta/muse-spark-1.2",
+      "description": "Agentic and website-building workloads with strong arena ELO.",
+      "priceIn": 1.25,
+      "priceOut": 4.25
+    },
+    {
+      "provider": "litellm",
+      "id": "moonshotai/kimi-k3",
+      "description": "Top-tier coding quality when output cost matters less; expensive output.",
+      "priceIn": 0.5,
+      "priceOut": 12.0
+    },
+    {
+      "provider": "litellm",
+      "id": "qwen/qwen3.8-max",
+      "description": "Hardest coding and reasoning tasks; best coder outside the big four.",
+      "priceIn": 2.0,
+      "priceOut": 6.0
+    }
+  ],
+  "default": "deepseek/deepseek-v4-flash",
+  "override": null,
+  "fallback": "cheapest",
+  "classifier": {
+    "provider": "local",
+    "timeoutMs": 5000,
+    "maxInputTokens": 512,
+    "failurePolicy": "deterministic"
+  },
+  "jev": {
+    "provider": "litellm",
+    "model": "typesafe/jev-1.13",
+    "protocol": "systemone",
+    "baseUrl": "https://litellm.example.com/v1",
+    "timeoutMs": 5000,
+    "maxInputTokens": 28672,
+    "failurePolicy": "deterministic",
+    "apiKeyEnv": "LITELLM_API_KEY"
+  },
+  "benchmarks": {
+    "enabled": true,
+    "source": "openrouter",
+    "refreshIntervalMs": 86400000,
+    "staleAfterMs": 2592000000
+  },
+  "scoring": {
+    "enabled": true,
+    "missingPolicy": "neutral",
+    "stalePolicy": "use",
+    "expectedInputTokens": 4000,
+    "expectedOutputTokens": 1000,
+    "classifierWeight": 0.35
+  },
+  "cacheDir": null,
+  "contextBudgetChars": 1800,
+  "recentTurns": 4,
+  "layaTimeoutMs": 5000
+}
