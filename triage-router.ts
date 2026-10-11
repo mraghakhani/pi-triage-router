@@ -1322,6 +1322,9 @@ function argmaxKey<T extends string>(probabilities: Record<string, number>, keys
 			best = key;
 		}
 	}
+	// All-zero or empty probabilities mean "no classification signal" -> null,
+	// mirroring argmaxModel, so the documented "standard"/"coding" defaults apply.
+	if (bestP <= 0) return null;
 	return best;
 }
 

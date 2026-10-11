@@ -104,7 +104,7 @@ const cost = costs.get(key) ?? neutralCost;
 
 ---
 
-## B7 · Info — `argmaxKey` all-zero/empty probabilities return the first key, defeating the documented defaults
+## B7 · Info — `argmaxKey` all-zero/empty probabilities return the first key, defeating the documented defaults ✅ fixed
 
 **Location:** `triage-router.ts`, `argmaxKey()` and its call sites in `decide()`.
 

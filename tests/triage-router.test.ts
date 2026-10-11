@@ -273,6 +273,13 @@ test("fallback policy prefers a valid default, then the configured direction", (
 	);
 });
 
+test("empty classifier probabilities default to standard/coding, not question", () => {
+	const eligible = router.eligibleModels(testConfig(), registryFor(ALL_KEYS));
+	const decision = router.decide({ model: {}, complexity: {}, category: {} }, testConfig(), eligible);
+	assert.equal(decision.complexity, "standard");
+	assert.equal(decision.category, "coding");
+});
+
 test("fallback throws (observably) when nothing is eligible", () => {
 	const config = testConfig();
 	config.models[0].enabled = false;
