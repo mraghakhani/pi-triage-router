@@ -651,3 +651,31 @@ test("parseDataset sanitizes corrupt metric rows so undefined/NaN never reach sc
 test("parseDataset rejects a cache whose fetchedAt is not a parseable date", () => {
 	assert.equal(parseDataset({ fetchedAt: "not-a-date", source: "openrouter", models: {} }), null);
 });
+
+test("free (zero-price) models score 1.0 on the cost axis, not the missing-price neutral bucket", () => {
+	const mk = () => ({
+		coding: 60, reasoning: 60, agentic: null, arena: null, gpqa: null,
+		taskSuccess: null, costPerTask: null, research: null, infra: null,
+		updatedAt: "2026-10-01T00:00:00Z", match: "exact" as const, variants: 1, sources: ["test"],
+	});
+	const dataset: BenchmarkDataset = {
+		fetchedAt: "2026-10-09T00:00:00Z",
+		source: "test-fixture",
+		sourceUrl: "tests (synthetic)",
+		asOf: "2026-10-09T00:00:00Z",
+		models: { free: mk(), cheap: mk(), pricey: mk() },
+	};
+	const entries: ModelEntry[] = [
+		{ provider: "litellm", id: "free", description: "free", priceIn: 0, priceOut: 0 },
+		{ provider: "litellm", id: "cheap", description: "cheap", priceIn: 0.01, priceOut: 0.02 },
+		{ provider: "litellm", id: "pricey", description: "pricey", priceIn: 0.5, priceOut: 1 },
+	];
+	const result = scoreEligible({
+		eligible: entries, category: "question", complexity: "standard",
+		config: scoringConfig(), dataset, estimatedCost: est,
+	});
+	const costOf = Object.fromEntries(result.ranked.map((r) => [r.entry.id, r.cost]));
+	assert.equal(costOf["free"], 1, "free is the cheapest tier");
+	assert.equal(costOf["cheap"], 1, "cheapest paid model ties at the axis cap");
+	assert.ok(costOf["pricey"] < 1, "pricier model scores below the cheapest");
+});

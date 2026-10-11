@@ -88,7 +88,7 @@ The 4-digit branch is meant to be `-MMDD`, but any 4 digits match, e.g. config i
 
 ---
 
-## B6 · Low — Free (0-cost) models are excluded from cost normalization
+## B6 · Low — Free (0-cost) models are excluded from cost normalization ✅ fixed
 
 **Location:** `triage-router-lib/triage-router-benchmarks.ts`, `scoreEligible()` step 3 (L~851).
 

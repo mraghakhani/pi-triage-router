@@ -887,15 +887,22 @@ export function scoreEligible(input: ScoreInput): ScoreResult {
 	// when models cluster). Missing price = missing data, per policy.
 	const costs = new Map<string, number>();
 	const rawCost = new Map<string, number>();
+	const estByKey = new Map<string, number | null>();
 	for (const entry of eligible) {
 		const key = entry.id;
 		const est = input.estimatedCost(entry);
+		estByKey.set(key, est);
 		if (est !== null && est > 0) {
 			rawCost.set(key, est);
 		}
 	}
 	const minCost = rawCost.size ? Math.min(...rawCost.values()) : null;
 	for (const [key, est] of rawCost) costs.set(key, minCost! / est);
+	// Free models (est === 0) are the cheapest tier: score 1.0 on the cost axis
+	// instead of being dropped into the "missing price" neutral bucket.
+	for (const [key, est] of estByKey) {
+		if (est === 0) costs.set(key, 1);
+	}
 	const neutralCost = costs.size ? [...costs.values()].reduce((a, b) => a + b, 0) / costs.size : 0.5;
 	if (costs.size < eligible.length) missingUsed = true;
 
