@@ -52,21 +52,9 @@ Related, same root cause: `datasetStatus()` does `Date.parse(dataset.fetchedAt)`
 
 ---
 
-## B3 · Low — Invalid `cacheDir` type is assigned despite "ignoring" message
+## B3 · Low — Invalid `cacheDir` type is assigned despite "ignoring" message ❌ false positive
 
-**Location:** `triage-router.ts` L448-452, `validateConfig()`.
-
-```ts
-if (obj.cacheDir !== undefined && obj.cacheDir !== null && typeof obj.cacheDir !== "string") {
-    problems.push('"cacheDir" must be a string or null; ignoring');
-} else {
-    config.cacheDir = (obj.cacheDir as string | null | undefined) ?? null;
-}
-```
-
-For `cacheDir: 42`, the problem message says *"ignoring"* but the `else` branch **assigns** the invalid value (`config.cacheDir = 42`), which then flows into `Laya.load({ cacheDir: 42 })`. Other config fields with the same shape (`contextBudgetChars`, `recentTurns`) correctly keep the default on invalid input.
-
-**Fix:** `config.cacheDir = typeof obj.cacheDir === "string" ? obj.cacheDir : null;`
+**Correction (during fix pass):** this finding was wrong — the original code is correct. `validateConfig()` (L448-452) only assigns `config.cacheDir` in the `else` branch, which is reached only for `undefined` / `null` / `string` values; any other type (e.g. `42`) hits the `if` branch, logs the problem, and **does not assign**. The message *"ignoring"* is accurate. No code change made; no commit.
 
 ---
 
