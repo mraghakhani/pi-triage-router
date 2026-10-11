@@ -30,11 +30,15 @@ Remove it with `pi remove git:github.com/mraghakhani/pi-triage-router`.
 
 ### Where files live
 
+Sources land in different directories (`git:` under `~/.pi/agent/git/...`,
+`npm:` under `~/.pi/agent/npm/node_modules/...`) - the rows below are for the
+git install:
+
 | What | Path | Edit it? |
 |---|---|---|
 | Config | `~/.pi/agent/triage-router.json` | **yes - the only file you edit** |
-| Bundled defaults | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
-| Benchmark cache | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.benchmarks.json` | no - regenerated automatically |
+| Bundled defaults | `~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
+| Benchmark cache | `~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.benchmarks.json` | no - regenerated automatically |
 | Laya weights (~2 GB) | `~/.cache/receptron-laya` | no - downloaded on first use |
 
 Resolution order is `TRIAGE_ROUTER_CONFIG` > `~/.pi/agent/triage-router.json` >
@@ -42,7 +46,7 @@ bundled `triage-router.json`, so your edits always survive `pi update`. To
 customise:
 
 ```sh
-cp ~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json \
+cp ~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.json \
    ~/.pi/agent/triage-router.json
 $EDITOR ~/.pi/agent/triage-router.json
 ```
