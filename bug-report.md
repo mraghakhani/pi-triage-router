@@ -114,7 +114,7 @@ const cost = costs.get(key) ?? neutralCost;
 
 ---
 
-## B8 · Info — Escalation rule can override the benchmark-scored pick with the strongest model
+## B8 · Info — Escalation rule can override the benchmark-scored pick with the strongest model ⏸ deferred (policy)
 
 **Location:** `triage-router.ts`, `decide()` escalation branch.
 
@@ -122,7 +122,9 @@ With `scoring.enabled`, the scored pick already applies `complexityQualityDelta`
 
 ---
 
-## B9 · Info — `confidence` is misleading for scored picks
+## B9 · Info — `confidence` is misleading for scored picks ❌ not a bug
+
+**Correction (during fix pass):** not a bug — `scoreEligible`'s blend already requires classifier support for a model to win on benchmarks alone (`supportOf`), and the regression test asserts the scored pick's `confidence > 0`. The field intentionally carries the classifier's support for the selected model. No change.
 
 **Location:** `triage-router.ts` L1257.
 
@@ -140,7 +142,7 @@ When the pick came from benchmark scoring (`rule: "scored"`), `confidence` still
 
 ---
 
-## B11 · Info — Dead code and doc mismatches (cosmetic)
+## B11 · Info — Dead code and doc mismatches ⏭ cosmetic (not a bug)
 
 - `triage-router-benchmarks.ts`: `lastAttemptAt` is written (`scheduleRefresh`) and reset for tests but **never read**.
 - `triage-router-openrouter.ts`, `callDecisions()` JSDoc: *"Total attempt budget in ms"* — the implementation applies `timeoutMs` **per attempt** (2 attempts → up to ~2× timeout). Doc should say "per attempt".
@@ -149,7 +151,7 @@ When the pick came from benchmark scoring (`rule: "scored"`), `confidence` still
 
 ---
 
-## B12 · Low (design) — A failed first Laya load is permanent for the whole session
+## B12 · Low (design) — A failed first Laya load is permanent for the whole session ⏸ deferred (improvement)
 
 **Location:** `triage-router.ts`, `getLaya()`.
 
