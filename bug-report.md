@@ -58,7 +58,7 @@ Related, same root cause: `datasetStatus()` does `Date.parse(dataset.fetchedAt)`
 
 ---
 
-## B4 · Low — Override / direct routes keep a stale `state.model`
+## B4 · Low — Override / direct routes keep a stale `state.model` ✅ fixed
 
 **Location:** `triage-router.ts` L1775 (override path) and the `reason === "direct"` path (~L1800), `handleRequest()`.
 

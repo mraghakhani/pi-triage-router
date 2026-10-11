@@ -1772,7 +1772,7 @@ export async function handleRequest(
 			if (config.override) {
 				const entry = eligible.find((e) => composite(e) === config.override);
 				if (entry) {
-					const state = request.state ?? { model: composite(entry), summary: "" };
+					const state = { model: composite(entry), summary: request.state?.summary ?? "" };
 					logDecision(
 						{
 							entry,
@@ -1811,7 +1811,7 @@ export async function handleRequest(
 					null,
 					ctx,
 				);
-				return buildRoute(request, ctx, entry, request.state ?? { model: composite(entry), summary: "" });
+				return buildRoute(request, ctx, entry, { model: composite(entry), summary: request.state?.summary ?? "" });
 			}
 
 			// Continuations and retries stay on the model that handled the turn

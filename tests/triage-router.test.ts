@@ -472,6 +472,21 @@ test("direct requests route to the cheapest eligible model", async () => {
 	assert.equal(route.model.id, "deepseek/deepseek-v4-flash");
 });
 
+test("override and direct routes report the model that actually handled the turn", async () => {
+	router.setConfigForTests(testConfig({ override: "litellm/deepseek/deepseek-v4-pro" }));
+	const prior: router.LayaState = { model: "litellm/z-ai/glm-5.3", summary: "kept" };
+	const ctx = makeCtx(null) as never;
+
+	// Override wins and the persisted state must point at the override model,
+	// so a later continuation sticks to the model that served the turn.
+	const vm = captureRoute();
+	const overrideRoute = await vm.route(routeRequest([userMsg("any request")], prior, "user"), ctx);
+	assert.equal(overrideRoute.model.id, "deepseek/deepseek-v4-pro");
+	const state = overrideRoute.state as router.LayaState;
+	assert.equal(state.model, "litellm/deepseek/deepseek-v4-pro");
+	assert.equal(state.summary, "kept", "summary preserved");
+});
+
 test("continuations stay sticky on the session model, retry included", async () => {
 	const vm = captureRoute();
 	const ctx = makeCtx(null) as never;
