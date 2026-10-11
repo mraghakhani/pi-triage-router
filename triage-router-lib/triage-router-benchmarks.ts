@@ -483,7 +483,32 @@ export function parseDataset(raw: unknown): BenchmarkDataset | null {
 	if (typeof d.fetchedAt !== "string" || typeof d.source !== "string" || typeof d.models !== "object" || !d.models) {
 		return null;
 	}
-	return d as BenchmarkDataset;
+	if (!Number.isFinite(Date.parse(d.fetchedAt))) return null;
+	// Sanitize per-model rows: a corrupt or hand-edited cache must never feed
+	// non-numbers into scoring (undefined/NaN would poison normalize() into NaN
+	// scores). Invalid numeric fields become null; invalid rows are dropped.
+	const cleanModels: Record<string, ModelBenchmarkMetrics> = {};
+	for (const [id, entry] of Object.entries(d.models)) {
+		if (typeof entry !== "object" || entry === null) continue;
+		const src = entry as unknown as Record<string, unknown>;
+		cleanModels[id] = {
+			coding: num(src.coding),
+			reasoning: num(src.reasoning),
+			agentic: num(src.agentic),
+			arena: num(src.arena),
+			gpqa: num(src.gpqa),
+			taskSuccess: num(src.taskSuccess),
+			costPerTask: num(src.costPerTask),
+			research: num(src.research),
+			infra: num(src.infra),
+			updatedAt:
+				typeof src.updatedAt === "string" && Number.isFinite(Date.parse(src.updatedAt)) ? src.updatedAt : null,
+			match: src.match === "dated" ? "dated" : "exact",
+			variants: typeof src.variants === "number" && Number.isFinite(src.variants) ? src.variants : 0,
+			sources: Array.isArray(src.sources) ? src.sources.filter((s): s is string => typeof s === "string") : [],
+		};
+	}
+	return { ...d, models: cleanModels } as BenchmarkDataset;
 }
 
 // mtime-cached reads: routing may consult the dataset twice per request.

@@ -603,3 +603,48 @@ test("benchmarkProxyUrl: \"direct\" means never proxy even when settings/env pro
 	assert.equal(benchmarkProxyUrl("", env), null);
 	assert.equal(benchmarkProxyUrl("http://explicit:8080", env), "http://explicit:8080");
 });
+
+test("parseDataset sanitizes corrupt metric rows so undefined/NaN never reach scoring", () => {
+	const dataset = parseDataset({
+		fetchedAt: "2026-01-01T00:00:00.000Z",
+		source: "openrouter",
+		sourceUrl: "https://openrouter.ai",
+		asOf: null,
+		models: {
+			"litellm/a": {
+				coding: 10,
+				reasoning: "not-a-number",
+				agentic: undefined,
+				arena: 20,
+				gpqa: Number.NaN,
+				taskSuccess: null,
+				costPerTask: 1.5,
+				research: null,
+				infra: null,
+				updatedAt: "garbage",
+				match: "exact",
+				variants: 1,
+				sources: ["artificial-analysis"],
+			},
+			"litellm/b": "not-an-object", // dropped
+			"litellm/c": null, // dropped
+		},
+	});
+	assert.ok(dataset, "dataset is structurally valid and parsed");
+	const a = dataset.models["litellm/a"];
+	assert.equal(a.coding, 10);
+	assert.equal(a.reasoning, null);
+	assert.equal(a.agentic, null);
+	assert.equal(a.arena, 20);
+	assert.equal(a.gpqa, null);
+	assert.equal(a.costPerTask, 1.5);
+	assert.equal(a.updatedAt, null);
+	assert.equal(a.variants, 1);
+	assert.equal(a.sources.length, 1);
+	assert.equal(dataset.models["litellm/b"], undefined);
+	assert.equal(dataset.models["litellm/c"], undefined);
+});
+
+test("parseDataset rejects a cache whose fetchedAt is not a parseable date", () => {
+	assert.equal(parseDataset({ fetchedAt: "not-a-date", source: "openrouter", models: {} }), null);
+});

@@ -31,7 +31,7 @@ Note `config.proxyUrl` may be `null` by default (unspecified) while `"direct"` m
 
 ---
 
-## B2 · Medium — Corrupt benchmark cache poisons scores with `NaN`
+## B2 · Medium — Corrupt benchmark cache poisons scores with `NaN` ✅ fixed
 
 **Location:** `triage-router-lib/triage-router-benchmarks.ts` — `parseDataset()` (L480) and `scoreEligible()`/`metricValue` (L~800-860).
 
