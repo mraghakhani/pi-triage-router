@@ -32,7 +32,7 @@
 import { readFileSync, renameSync, statSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Category, ModelEntry, RouterConfig } from "../triage-router.ts";
-import { makeFetch, normalizeProxy, resolveProxyUrl, RemoteClassifierError } from "./triage-router-openrouter.ts";
+import { makeFetch, normalizeProxy, resolveApiKey, resolveProxyUrl, RemoteClassifierError } from "./triage-router-openrouter.ts";
 
 export type FetchLike = Parameters<typeof makeFetch>[1];
 
@@ -638,10 +638,12 @@ export async function refreshBenchmarks(
 				ids,
 			);
 		} else {
-			const key = env(config.apiKeyEnv);
+			// Unified endpoint is OpenRouter's: env var first, then the Pi auth
+			// file's "openrouter" entry (same resolution as the classifier).
+			const key = env(config.apiKeyEnv) ?? resolveApiKey(config.apiKeyEnv, "openrouter");
 			if (!key) {
 				throw new RemoteClassifierError(
-					`benchmark refresh requires ${config.apiKeyEnv} for the unified OpenRouter benchmark endpoint`,
+					`benchmark refresh requires ${config.apiKeyEnv} or an "openrouter" key in the Pi auth file (~/.pi/agent/auth.json) for the unified OpenRouter benchmark endpoint`,
 				);
 			}
 			const url = `${BENCH_BASE}/api/v1/benchmarks`;

@@ -36,7 +36,7 @@ import {
 	type BenchmarkConfig,
 	type BenchmarkDataset,
 } from "../triage-router-lib/triage-router-benchmarks.ts";
-import { setFetchForTests, type FetchLike } from "../triage-router-lib/triage-router-openrouter.ts";
+import { setFetchForTests, setRuntimePathsForTests, type FetchLike } from "../triage-router-lib/triage-router-openrouter.ts";
 import { testConfig } from "./fixtures.ts";
 import { decide, loadConfig, validateConfig, type ModelEntry } from "../triage-router.ts";
 
@@ -50,6 +50,7 @@ afterEach(() => {
 	resetRefreshStateForTests();
 	resetDatasetReadCacheForTests();
 	setFetchForTests(null);
+	setRuntimePathsForTests({ authFile: null });
 	delete process.env.OPENROUTER_API_KEY;
 	try {
 		rmSync(dir, { recursive: true, force: true });
@@ -232,6 +233,7 @@ test("refresh failure keeps the last known good cache byte-for-byte", async () =
 
 test("unified source without a key fails clearly; openrouter-models works keyless", async () => {
 	delete process.env.OPENROUTER_API_KEY;
+	setRuntimePathsForTests({ authFile: join(dir, "no-auth-file.json") });
 	setFetchForTests(fetchReturning(UNIFIED_PAYLOAD));
 	const noKey = await refreshBenchmarks(benchConfig(), IDS);
 	assert.equal(noKey.ok, false);
@@ -242,6 +244,16 @@ test("unified source without a key fails clearly; openrouter-models works keyles
 	const keyless = await refreshBenchmarks(benchConfig({ source: "openrouter-models" }), IDS);
 	assert.equal(keyless.ok, true);
 	assert.equal(readDataset(join(dir, "bench.json"))?.models["z-ai/glm-5.3"].coding, 74.8);
+});
+
+test("unified source: missing env key falls back to the auth file's openrouter entry", async () => {
+	delete process.env.OPENROUTER_API_KEY;
+	writeFileSync(join(dir, "auth.json"), JSON.stringify({ openrouter: { type: "api", key: "auth-file-key" } }));
+	setRuntimePathsForTests({ authFile: join(dir, "auth.json") });
+	setFetchForTests(fetchReturning(UNIFIED_PAYLOAD));
+	const result = await refreshBenchmarks(benchConfig(), IDS);
+	assert.equal(result.ok, true);
+	assert.equal(readDataset(join(dir, "bench.json"))?.models["z-ai/glm-5.3"].coding, 75);
 });
 
 test("scheduleRefresh: absent/stale cache triggers background refresh; fresh cache does not; single flight", async () => {
