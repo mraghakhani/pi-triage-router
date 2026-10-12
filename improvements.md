@@ -82,6 +82,8 @@ Optional because `source: "context"` (Pi's own estimate) usually shadows this pa
 
 ## 11. Document restart requirements for `jev` registration
 
+**Status: implemented (documented in README; lazy registration not pursued).**
+
 `default()` decides `jev/auto` registration from the config **at startup**. Editing the config to add/remove `jev` later requires restarting Pi; nothing in the README says so. Either document it, or check `loadConfig().jev` at route time and register lazily (the extension API permitting).
 
 ## 12. Test-coverage additions matching the above

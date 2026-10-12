@@ -275,6 +275,8 @@ The extension registers **two virtual models** visible in `/models`:
 | `laya/auto` | the `classifier` section (local Laya by default) | always |
 | `jev/auto` | the `jev` section (remote Jev: openrouter or litellm) | the config has a `jev` section |
 
+Registration is decided once at startup: adding or removing the `jev` section in the config requires restarting Pi for `jev/auto` to appear in or disappear from `/models`.
+
 Both entries run the **identical** pipeline - same model catalog, context
 system, decision rules, benchmark scoring, eligibility checks, logs - only
 the classifier backend differs. Pick the entry per session (`pi --model
