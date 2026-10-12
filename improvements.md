@@ -23,6 +23,8 @@ Trust-boundary principle already used elsewhere in the codebase ("a corrupt cach
 
 ## 3. Fix free-model cost normalization ⚑ (fixes B6)
 
+**Status: covered by the bug-fix pass — `scoreEligible` treats `est === 0` as the cheapest tier (score 1.0); test "free (zero-price) models score 1.0 on the cost axis" (tests/benchmarks.test.ts:683).**
+
 Two-line change in `scoreEligible` step 3 (see B6): treat `est === 0` as a legitimate best cost. Also stops wrongly flagging `missingUsed` for fully-priced free models. Add one regression test (`$0` model + paid model, expect the free model ranked first on `budget` category).
 
 ## 4. Unify proxy resolution, honor `"direct"` everywhere ⚑ (fixes B1)
@@ -39,9 +41,13 @@ Currently the classifier path is right and the benchmark path is wrong for the s
 
 ## 5. Return correct state on override/direct routes ⚑ (fixes B4)
 
+**Status: covered by the bug-fix pass — both `handleRequest` branches use `{ model: composite(entry), summary: request.state?.summary ?? "" }`; test "override and direct routes report the model that actually handled the turn" (tests/triage-router.test.ts:482).**
+
 `handleRequest()`: replace `request.state ?? { model: composite(entry), summary: "" }` with `{ model: composite(entry), summary: request.state?.summary ?? "" }` in both the override and `direct` branches. Small diff, removes the sticky-model inconsistency. One test: override route → continuation sticks to the override model, not the previous one.
 
 ## 6. Fix `cacheDir` validation and slug-date validation ⚑ (fixes B3, B5)
+
+**Status: covered by the bug-fix pass — cacheDir type guard assigns only when string/null (triage-router.ts:463-467); resolveSlug rejects non-calendar MMDD (triage-router-lib/triage-router-benchmarks.ts:220-222); tests at tests/benchmarks.test.ts:123-125.**
 
 - `cacheDir`: one-line fix (assign only when `typeof === "string"`).
 - `resolveSlug` 4-digit branch: reject non-calendar MMDD values (`month 01–12, day 01–31`). Keeps `-2025`-style year suffixes from matching as dates.
@@ -93,6 +99,8 @@ Optional because `source: "context"` (Pi's own estimate) usually shadows this pa
 `default()` decides `jev/auto` registration from the config **at startup**. Editing the config to add/remove `jev` later requires restarting Pi; nothing in the README says so. Either document it, or check `loadConfig().jev` at route time and register lazily (the extension API permitting).
 
 ## 12. Test-coverage additions matching the above
+
+**Status: covered by the bug-fix pass — all five listed tests exist (proxy direct tests/benchmarks.test.ts:631, malformed caches :179, override continuity tests/triage-router.test.ts:482, $0-price :683, 4-digit slug :123-125).**
 
 - Proxy: `benchmarks.proxyUrl: "direct"` + `https_proxy` set → refresh fetches direct (B1).
 - Corrupt cache fixtures: string/undefined metric values, garbage `fetchedAt` (B2).
