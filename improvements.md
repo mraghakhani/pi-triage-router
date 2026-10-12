@@ -13,6 +13,8 @@ Ordered by value. Items marked ⚑ also close a bug from `bug-report.md` (cross-
 
 ## 2. Harden `parseDataset` at the boundary ⚑ (fixes B2)
 
+**Status: implemented in B2 fix (`1cd4085`).** No code change needed here — `parseDataset` already sanitizes every row via `num()`, drops non-object rows, validates `fetchedAt`/`updatedAt` dates, and `datasetStatus` guards null dataset. `metricValue` has no per-read re-validation to remove.
+
 Trust-boundary principle already used elsewhere in the codebase ("a corrupt cache file is discarded, not trusted") is only applied at the top level. Extend it:
 
 - Validate each `models[id]` row: all metric fields numeric-finite or `null` (reuse the ingest-time `num()`), drop invalid rows instead of trusting the whole file.
