@@ -1359,7 +1359,8 @@ export function peekSession(ctx: ExtensionContext): SessionPeek {
 /** Estimate the cost of the upcoming request. Never fabricated: falls back to null.
  * Prices are USD per 1M tokens. Input tokens: previous request's actual usage
  * (only when it ran on the SAME provider+model), then Pi context tokens, then
- * chars/4. Output tokens: only from the previous request's actual usage. */
+ * chars/4 of the assembled routing input (not the clamped current request).
+ * Output tokens: only from the previous request's actual usage. */
 export function estimateCost(
 	entry: ModelEntry,
 	registryModel: RegistryModel | undefined,
@@ -1680,7 +1681,7 @@ export async function classifyAndDecide(
 	decision.estimate = estimateCost(
 		decision.entry,
 		registryModel,
-		input.currentRequest.length,
+		input.prompt.length,
 		contextTokens,
 		session.lastUsage,
 	);

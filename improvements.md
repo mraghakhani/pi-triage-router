@@ -77,6 +77,8 @@ Cheap, isolated polish:
 
 ## 10. Better cost estimation without a tokenizer (optional)
 
+**Status: implemented — assembled prompt length for chars/4 fallback; stateTokens/roomTokens reuse not pursued.**
+
 `estimateCost`'s `chars` fallback uses the **clamped** `currentRequest.length` (≤ ~786 chars) and ignores recent turns + summary that are part of the real prompt — a systematic underestimate exactly when the better sources (`usage`, `contextTokens`) are unavailable. Options, cheapest first:
 
 - Estimate from `prompt.length` (the assembled routing input) instead of the clamped request.
