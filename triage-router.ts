@@ -1734,118 +1734,118 @@ export async function handleRequest(
 	config: RouterConfig,
 	backend: ClassifierBackend,
 ): Promise<Awaited<ReturnType<typeof buildRoute>>> {
-			const contextTokens = safeContextTokens(ctx);
-			// Required context for the upcoming request: current conversation +
-			// the new request (chars/4, documented approximation) + output reserve.
-			const requiredTokens =
-				contextTokens == null
-					? null
-					: contextTokens + Math.ceil(lastUserText(request.messages).length / 4) + OUTPUT_RESERVE_TOKENS;
-			const eligible = eligibleModels(config, ctx.modelRegistry, requiredTokens);
+	const contextTokens = safeContextTokens(ctx);
+	// Required context for the upcoming request: current conversation +
+	// the new request (chars/4, documented approximation) + output reserve.
+	const requiredTokens =
+		contextTokens == null
+			? null
+			: contextTokens + Math.ceil(lastUserText(request.messages).length / 4) + OUTPUT_RESERVE_TOKENS;
+	const eligible = eligibleModels(config, ctx.modelRegistry, requiredTokens);
 
-			// Manual override: validated, takes precedence, visible in diagnostics.
-			if (config.override) {
-				const entry = eligible.find((e) => composite(e) === config.override);
-				if (entry) {
-					const state = { model: composite(entry), summary: request.state?.summary ?? "" };
-					logDecision(
-						{
-							entry,
-							rule: "override",
-							complexity: "standard",
-							category: "question",
-							confidence: null,
-							notes: ["config override"],
-							estimate: emptyEstimate(),
-						},
-						null,
-						emptyRoutingInput(lastUserText(request.messages)),
-						null,
-						ctx,
-					);
-					return buildRoute(request, ctx, entry, state);
-				}
-				console.error(`${LOG_PREFIX} configured "override" ${config.override} is not eligible; routing normally`);
-			}
-
-			// Direct requests (compaction summaries, extension calls): cheapest eligible.
-			if (request.reason === "direct") {
-				const entry = fallbackEntry(config, eligible);
-				logDecision(
-					{
-						entry,
-						rule: "direct",
-						complexity: "standard",
-						category: "question",
-						confidence: null,
-						notes: ["request outside agent loop"],
-						estimate: emptyEstimate(),
-					},
-					null,
-					emptyRoutingInput(),
-					null,
-					ctx,
-				);
-				return buildRoute(request, ctx, entry, { model: composite(entry), summary: request.state?.summary ?? "" });
-			}
-
-			// Continuations and retries stay on the model that handled the turn
-			// (bounded: no re-escalation loops), unless it is no longer eligible.
-			if (request.reason !== "user" && request.state) {
-				const sticky = eligible.find((e) => composite(e) === request.state!.model);
-				if (sticky) {
-					logDecision(
-						{
-							entry: sticky,
-							rule: "sticky",
-							complexity: "standard",
-							category: "question",
-							confidence: null,
-							notes: [`${request.reason} keeps session model`],
-							estimate: emptyEstimate(),
-						},
-						null,
-						emptyRoutingInput(),
-						null,
-						ctx,
-					);
-					return buildRoute(request, ctx, sticky, request.state);
-				}
-				// State model gone (disabled/removed): fall through to fresh classification.
-			}
-
-			// New user request (or lost state): classify with context.
-			const benchmarkIds = config.models.filter((m) => m.enabled !== false).map((m) => m.id);
-			if (config.benchmarks.enabled && config.scoring.enabled) {
-				// Non-blocking: refresh runs in the background, routing reads the cache.
-				scheduleRefresh(config.benchmarks, benchmarkIds);
-			}
-			const { decision, layaMs, input, summary, lastCost, clf } = await classifyAndDecide(
-				request,
+	// Manual override: validated, takes precedence, visible in diagnostics.
+	if (config.override) {
+		const entry = eligible.find((e) => composite(e) === config.override);
+		if (entry) {
+			const state = { model: composite(entry), summary: request.state?.summary ?? "" };
+			logDecision(
+				{
+					entry,
+					rule: "override",
+					complexity: "standard",
+					category: "question",
+					confidence: null,
+					notes: ["config override"],
+					estimate: emptyEstimate(),
+				},
+				null,
+				emptyRoutingInput(lastUserText(request.messages)),
+				null,
 				ctx,
-				config,
-				eligible,
-				backend,
 			);
-			// Classifier cost/latency, logged SEPARATELY from execution-model cost.
-			reportRoute(
-				ctx,
-				`clf=${clf.provider} model=${clf.model} ms=${clf.ms ?? "-"} ` +
-					`in=${clf.inputTokens ?? "-"} out=${clf.outputTokens ?? "-"} ` +
-					`cost=${clf.cost ?? "-"}(${clf.costKind ?? "no-call"})`,
-				`clf ${clf.provider}${clf.cost != null ? ` · $${clf.cost}` : ""}`,
-			);
-			if (config.benchmarks.enabled && config.scoring.enabled) {
-				// Freshness + coverage observability for the scoring inputs.
-				reportRoute(ctx, datasetStatus(config.benchmarks, benchmarkIds), null);
-			}
-			// logDecision LAST: its status line is the selection, which must stay
-			// visible after the clf/bench diagnostics.
-			logDecision(decision, layaMs, input, lastCost, ctx);
-		return buildRoute(
-			request,
+			return buildRoute(request, ctx, entry, state);
+		}
+		console.error(`${LOG_PREFIX} configured "override" ${config.override} is not eligible; routing normally`);
+	}
+
+	// Direct requests (compaction summaries, extension calls): cheapest eligible.
+	if (request.reason === "direct") {
+		const entry = fallbackEntry(config, eligible);
+		logDecision(
+			{
+				entry,
+				rule: "direct",
+				complexity: "standard",
+				category: "question",
+				confidence: null,
+				notes: ["request outside agent loop"],
+				estimate: emptyEstimate(),
+			},
+			null,
+			emptyRoutingInput(),
+			null,
 			ctx,
-			decision.entry,
-			{ model: composite(decision.entry), summary },
 		);
+		return buildRoute(request, ctx, entry, { model: composite(entry), summary: request.state?.summary ?? "" });
+	}
+
+	// Continuations and retries stay on the model that handled the turn
+	// (bounded: no re-escalation loops), unless it is no longer eligible.
+	if (request.reason !== "user" && request.state) {
+		const sticky = eligible.find((e) => composite(e) === request.state!.model);
+		if (sticky) {
+			logDecision(
+				{
+					entry: sticky,
+					rule: "sticky",
+					complexity: "standard",
+					category: "question",
+					confidence: null,
+					notes: [`${request.reason} keeps session model`],
+					estimate: emptyEstimate(),
+				},
+				null,
+				emptyRoutingInput(),
+				null,
+				ctx,
+			);
+			return buildRoute(request, ctx, sticky, request.state);
+		}
+		// State model gone (disabled/removed): fall through to fresh classification.
+	}
+
+	// New user request (or lost state): classify with context.
+	const benchmarkIds = config.models.filter((m) => m.enabled !== false).map((m) => m.id);
+	if (config.benchmarks.enabled && config.scoring.enabled) {
+		// Non-blocking: refresh runs in the background, routing reads the cache.
+		scheduleRefresh(config.benchmarks, benchmarkIds);
+	}
+	const { decision, layaMs, input, summary, lastCost, clf } = await classifyAndDecide(
+		request,
+		ctx,
+		config,
+		eligible,
+		backend,
+	);
+	// Classifier cost/latency, logged SEPARATELY from execution-model cost.
+	reportRoute(
+		ctx,
+		`clf=${clf.provider} model=${clf.model} ms=${clf.ms ?? "-"} ` +
+			`in=${clf.inputTokens ?? "-"} out=${clf.outputTokens ?? "-"} ` +
+			`cost=${clf.cost ?? "-"}(${clf.costKind ?? "no-call"})`,
+		`clf ${clf.provider}${clf.cost != null ? ` · $${clf.cost}` : ""}`,
+	);
+	if (config.benchmarks.enabled && config.scoring.enabled) {
+		// Freshness + coverage observability for the scoring inputs.
+		reportRoute(ctx, datasetStatus(config.benchmarks, benchmarkIds), null);
+	}
+	// logDecision LAST: its status line is the selection, which must stay
+	// visible after the clf/bench diagnostics.
+	logDecision(decision, layaMs, input, lastCost, ctx);
+	return buildRoute(
+		request,
+		ctx,
+		decision.entry,
+		{ model: composite(decision.entry), summary },
+	);
 }

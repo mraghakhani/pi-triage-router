@@ -671,11 +671,9 @@ export async function refreshBenchmarks(
 
 // Module-level refresh bookkeeping (single-flight, hot-reload safe).
 let refreshInFlight: Promise<void> | null = null;
-let lastAttemptAt = 0;
 
 export function resetRefreshStateForTests(): void {
 	refreshInFlight = null;
-	lastAttemptAt = 0;
 }
 
 /**
@@ -697,7 +695,6 @@ export function scheduleRefresh(
 	} catch {
 		// No cache yet: refresh now.
 	}
-	lastAttemptAt = now();
 	refreshInFlight = refreshBenchmarks(config, ids, deps)
 		.then((result) => {
 			if (result.ok) {

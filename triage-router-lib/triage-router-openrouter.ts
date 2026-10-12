@@ -64,7 +64,7 @@ export interface DecisionCallOptions {
 	prompt: string;
 	/** The shared questions object (type/instructions/criteria per question). */
 	questions: Record<string, unknown>;
-	/** Total attempt budget in ms (each attempt aborts at this bound). */
+	/** Per-attempt timeout in ms (each attempt aborts independently at this bound). */
 	timeoutMs: number;
 	/** OpenRouter API key. Never logged or embedded in error messages. */
 	apiKey: string;

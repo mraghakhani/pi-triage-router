@@ -24,8 +24,7 @@
     "triage-router-lib/",
     "triage-router.json",
     "triage-router.sample.json",
-    "triage-router.benchmarks.json",
-    "scripts/"
+    "triage-router.benchmarks.json"
   ],
   "scripts": {
     "test": "node --test tests/",
