@@ -1224,7 +1224,9 @@ export function decide(
 			notes.push("benchmark scoring unavailable (no measured quality): classifier pick used");
 		}
 	}
-	const confidence = picked ? (probabilities.model[composite(picked)] ?? null) : null;
+	// Scored picks are made by benchmark scoring, not the classifier; its
+	// probability would misattribute the decision. The score is in the notes.
+	const confidence = picked && !scored ? (probabilities.model[composite(picked)] ?? null) : null;
 
 	if (!picked) {
 		notes.push("Laya selection rejected: outside eligible set");

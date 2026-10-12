@@ -58,6 +58,7 @@ Cheap, isolated polish:
 
 - `argmaxKey`: return `null` on all-zero/empty (mirror `argmaxModel`), keep documented `"standard"`/`"coding"` defaults meaningful.
 - `decide()`: report `confidence: null` for `rule === "scored"` picks (or add a `score` field to `RoutingDecision` and log that instead).
+  **Status: implemented — confidence: null for scored picks.**
 - `loadConfig`: include path in the cache key; cache the default-fallback too.
 - Delete `lastAttemptAt`; fix the `callDecisions` JSDoc ("per attempt" timeout); fix `handleRequest` indentation.
 - Remove the nonexistent `"scripts/"` from `package.json` `"files"`.

@@ -593,11 +593,39 @@ test("the reported Jev case: a zero-probability model no longer wins on benchmar
 		"xiaomi/mimo-v2.6-pro",
 		"regression: Jev gave mimo-v2.6-pro 0.0, so benchmark quality alone must not route to it",
 	);
-	assert.ok((decision.confidence ?? 0) > 0, "the routed model carries classifier support (was 0 before the blend)");
+	// confidence stays null for scored picks: the classifier did not make this
+	// decision, so its probability must not masquerade as decision confidence.
+	assert.equal(decision.confidence, null);
+	assert.ok(
+		decision.notes.some((n) => n.startsWith("scored pick score=")),
+		"the routed pick's score is reported via notes",
+	);
 	assert.ok(
 		model[`${decision.entry?.provider}/${decision.entry?.id}`] > 0,
 		"the routed model is one the classifier actually endorsed",
 	);
+});
+
+test("scored pick reports confidence null: the classifier did not make the pick", () => {
+	const cfg = scoringConfig();
+	const dataset = metricFixture();
+	const decision = decide(
+		{
+			model: { "litellm/model-a": 0.9, "litellm/model-b": 0.05, "litellm/model-c": 0.05 },
+			category: { coding: 1 },
+			complexity: { moderate: 1 },
+		} as any,
+		cfg,
+		ENTRIES,
+		{
+			dataset,
+			estimatedCost: est,
+			capabilities: (entry: ModelEntry) => entry.capabilities,
+		} as any,
+	);
+	assert.equal(decision.rule, "scored");
+	assert.equal(decision.confidence, null, "classifier probability must not pose as scored-pick confidence");
+	assert.ok(decision.notes.some((n) => n.startsWith("scored pick score=")), "the actual score is in the notes");
 });
 
 test("benchmarkProxyUrl: \"direct\" means never proxy even when settings/env proxies are set", () => {
