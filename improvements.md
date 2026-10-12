@@ -8,6 +8,7 @@ Ordered by value. Items marked ⚑ also close a bug from `bug-report.md` (cross-
 
 `validateConfig()` initializes `config.classifier`, `config.benchmarks`, and `config.scoring` **twice** — once inside the `config` object literal, then again immediately before applying the user's section (`classifier` re-init at ~L525, `benchmarks` re-init at ~L585, `scoring` re-init at ~L620). The two copies must be kept in sync by hand; they have already drifted stylistically (`layaTimeoutMs` feeds `classifier.timeoutMs` only in the second copy).
 
+**Status: implemented in this commit.**
 **Suggestion:** extract `defaultClassifier()`, `defaultBenchmarks()`, `defaultScoring()` helpers and call each exactly once. Removes ~40 duplicated lines and the drift risk. The `jev` section's separate default literal belongs in `defaultClassifier()` too.
 
 ## 2. Harden `parseDataset` at the boundary ⚑ (fixes B2)

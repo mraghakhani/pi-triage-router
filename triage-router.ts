@@ -373,6 +373,53 @@ function validateModelEntry(raw: unknown, index: number, problems: string[]): Mo
 	};
 }
 
+/** Shared classifier default; timeoutMs differs by call site (laya budget vs jev's own 5000). */
+function defaultClassifier(timeoutMs: number): ClassifierConfig {
+	return {
+		provider: "local",
+		model: "typesafe/jev-1.13",
+		timeoutMs,
+		maxInputTokens: 512,
+		localPrompt: ROLE_TEXT,
+		remotePrompt: DEFAULT_REMOTE_PROMPT,
+		failurePolicy: "deterministic",
+		apiKeyEnv: "OPENROUTER_API_KEY",
+		proxyUrl: null,
+		protocol: "decisions",
+		baseUrl: null,
+		authFile: null,
+	};
+}
+
+/** Benchmark cache defaults (shared by the initial literal and the mid-validation rebuild). */
+function defaultBenchmarks(): BenchmarkConfig {
+	return {
+		enabled: true,
+		source: "openrouter",
+		cachePath: join(HERE, "triage-router.benchmarks.json"),
+		refreshIntervalMs: 86_400_000,
+		staleAfterMs: 2_592_000_000,
+		timeoutMs: 15_000,
+		apiKeyEnv: "OPENROUTER_API_KEY",
+		proxyUrl: null,
+	};
+}
+
+/** Scoring defaults, disabled (shared by the initial literal and the mid-validation rebuild). */
+function defaultScoring(): ScoringConfig {
+	return {
+		enabled: false,
+		missingPolicy: "neutral",
+		missingPenalty: 0.15,
+		stalePolicy: "use",
+		expectedInputTokens: 4000,
+		expectedOutputTokens: 1000,
+		complexityQualityDelta: 0.15,
+		classifierWeight: 0,
+		weights: Object.fromEntries(CATEGORIES.map((cat) => [cat, { ...DEFAULT_SCORING_WEIGHTS[cat] }])) as Record<Category, CategoryWeights>,
+	};
+}
+
 /** Validate a raw parsed config object. Returns a validated config plus non-fatal problems. */
 export function validateConfig(raw: unknown): RouterConfig {
 	const problems: string[] = [];
@@ -383,42 +430,10 @@ export function validateConfig(raw: unknown): RouterConfig {
 		contextBudgetChars: 1800,
 		recentTurns: 4,
 		layaTimeoutMs: 5000,
-		classifier: {
-			provider: "local",
-			model: "typesafe/jev-1.13",
-			timeoutMs: 5000,
-			maxInputTokens: 512,
-			localPrompt: ROLE_TEXT,
-			remotePrompt: DEFAULT_REMOTE_PROMPT,
-			failurePolicy: "deterministic",
-			apiKeyEnv: "OPENROUTER_API_KEY",
-			proxyUrl: null,
-			protocol: "decisions",
-			baseUrl: null,
-			authFile: null,
-		},
+		classifier: defaultClassifier(5000),
 		jev: null,
-		benchmarks: {
-			enabled: true,
-			source: "openrouter",
-			cachePath: join(HERE, "triage-router.benchmarks.json"),
-			refreshIntervalMs: 86_400_000,
-			staleAfterMs: 2_592_000_000,
-			timeoutMs: 15_000,
-			apiKeyEnv: "OPENROUTER_API_KEY",
-			proxyUrl: null,
-		},
-		scoring: {
-			enabled: false,
-			missingPolicy: "neutral",
-			missingPenalty: 0.15,
-			stalePolicy: "use",
-			expectedInputTokens: 4000,
-			expectedOutputTokens: 1000,
-			complexityQualityDelta: 0.15,
-			classifierWeight: 0,
-			weights: Object.fromEntries(CATEGORIES.map((cat) => [cat, { ...DEFAULT_SCORING_WEIGHTS[cat] }])) as Record<Category, CategoryWeights>,
-		},
+		benchmarks: defaultBenchmarks(),
+		scoring: defaultScoring(),
 		problems,
 	};
 	for (const key of Object.keys(obj)) {
@@ -526,38 +541,12 @@ export function validateConfig(raw: unknown): RouterConfig {
 			} else problems.push(`"${label}.proxyUrl" must be a string or null ("direct" = never proxy)`);
 		}
 	}
-	config.classifier = {
-		provider: "local",
-		model: "typesafe/jev-1.13",
-		timeoutMs: config.layaTimeoutMs,
-		maxInputTokens: 512,
-		localPrompt: ROLE_TEXT,
-		remotePrompt: DEFAULT_REMOTE_PROMPT,
-		failurePolicy: "deterministic",
-		apiKeyEnv: "OPENROUTER_API_KEY",
-		proxyUrl: null,
-		protocol: "decisions",
-		baseUrl: null,
-		authFile: null,
-	};
+	config.classifier = defaultClassifier(config.layaTimeoutMs);
 	applyClassifierSection(obj.classifier, "classifier", config.classifier, true, problems);
 	if (obj.jev === undefined || obj.jev === null) {
 		config.jev = null;
 	} else {
-		const jev: ClassifierConfig = {
-			provider: "openrouter",
-			model: "typesafe/jev-1.13",
-			timeoutMs: 5000,
-			maxInputTokens: 512,
-			localPrompt: ROLE_TEXT,
-			remotePrompt: DEFAULT_REMOTE_PROMPT,
-			failurePolicy: "deterministic",
-			apiKeyEnv: "OPENROUTER_API_KEY",
-			proxyUrl: null,
-			protocol: "decisions",
-			baseUrl: null,
-			authFile: null,
-		};
+		const jev: ClassifierConfig = { ...defaultClassifier(5000), provider: "openrouter" };
 		applyClassifierSection(obj.jev, "jev", jev, false, problems);
 		config.jev = jev;
 	}
@@ -582,16 +571,7 @@ export function validateConfig(raw: unknown): RouterConfig {
 	}
 
 	// --- benchmark cache section ---
-	config.benchmarks = {
-		enabled: true,
-		source: "openrouter",
-		cachePath: join(HERE, "triage-router.benchmarks.json"),
-		refreshIntervalMs: 86_400_000,
-		staleAfterMs: 2_592_000_000,
-		timeoutMs: 15_000,
-		apiKeyEnv: "OPENROUTER_API_KEY",
-		proxyUrl: null,
-	};
+	config.benchmarks = defaultBenchmarks();
 	if (obj.benchmarks !== undefined) {
 		if (typeof obj.benchmarks !== "object" || obj.benchmarks === null || Array.isArray(obj.benchmarks)) {
 			problems.push('"benchmarks" must be an object; using defaults');
@@ -637,17 +617,7 @@ export function validateConfig(raw: unknown): RouterConfig {
 	}
 
 	// --- scoring section (default: disabled - existing behavior unchanged) ---
-	config.scoring = {
-		enabled: false,
-		missingPolicy: "neutral",
-		missingPenalty: 0.15,
-		stalePolicy: "use",
-		expectedInputTokens: 4000,
-		expectedOutputTokens: 1000,
-		complexityQualityDelta: 0.15,
-		classifierWeight: 0,
-		weights: Object.fromEntries(CATEGORIES.map((cat) => [cat, { ...DEFAULT_SCORING_WEIGHTS[cat] }])) as Record<Category, CategoryWeights>,
-	};
+	config.scoring = defaultScoring();
 	if (obj.scoring !== undefined) {
 		if (typeof obj.scoring !== "object" || obj.scoring === null || Array.isArray(obj.scoring)) {
 			problems.push('"scoring" must be an object; using defaults (disabled)');
