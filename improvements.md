@@ -27,6 +27,8 @@ Two-line change in `scoreEligible` step 3 (see B6): treat `est === 0` as a legit
 
 ## 4. Unify proxy resolution, honor `"direct"` everywhere ⚑ (fixes B1)
 
+**Status: implemented in this commit.**
+
 Extract one helper used by both `classifyAndDecide` (classifier path) and `refreshBenchmarks`:
 
 ```ts

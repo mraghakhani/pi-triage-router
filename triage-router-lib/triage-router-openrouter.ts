@@ -186,15 +186,18 @@ export function normalizeProxy(value: string | null | undefined): string | null 
  * Proxy for a remote call: explicit config value ("direct" = never) first,
  * then Pi's settings.json httpProxy, then env proxies.
  */
-export function resolveProxyUrl(explicit: string | null | undefined): string | null {
+export function resolveProxyUrl(
+	explicit: string | null | undefined,
+	env: (name: string) => string | undefined = (name) => process.env[name],
+): string | null {
 	// An explicit value short-circuits: "direct" (or empty) means NEVER proxy.
 	if (explicit != null) return normalizeProxy(explicit);
 	return (
 		settingsHttpProxy() ??
-		normalizeProxy(process.env.https_proxy) ??
-		normalizeProxy(process.env.HTTPS_PROXY) ??
-		normalizeProxy(process.env.http_proxy) ??
-		normalizeProxy(process.env.HTTP_PROXY) ??
+		normalizeProxy(env("https_proxy")) ??
+		normalizeProxy(env("HTTPS_PROXY")) ??
+		normalizeProxy(env("http_proxy")) ??
+		normalizeProxy(env("HTTP_PROXY")) ??
 		null
 	);
 }

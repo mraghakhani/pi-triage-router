@@ -609,9 +609,7 @@ export function benchmarkProxyUrl(
 	proxyUrl: string | null,
 	env: (name: string) => string | undefined = (name) => process.env[name],
 ): string | null {
-	return proxyUrl != null
-		? normalizeProxy(proxyUrl)
-		: (resolveProxyUrl(null) ?? env("https_proxy") ?? env("HTTPS_PROXY") ?? null);
+	return proxyUrl != null ? normalizeProxy(proxyUrl) : resolveProxyUrl(null, env);
 }
 
 export async function refreshBenchmarks(
