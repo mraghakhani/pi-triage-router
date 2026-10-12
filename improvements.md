@@ -71,6 +71,8 @@ Cheap, isolated polish:
 
 ## 9. Quiet the per-model context-window logging
 
+**Status: implemented in this commit.**
+
 `eligibleModels()` `console.error`s one line per excluded model, on **every** routed request when the context is large (the common case for big sessions). Collapse to one line per request (`excluding N models below ~X tokens: a, b`) or fold into `logDecision` notes. Purely cosmetic for the terminal, but it fires every turn.
 
 ## 10. Better cost estimation without a tokenizer (optional)

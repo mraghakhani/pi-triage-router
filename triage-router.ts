@@ -1097,9 +1097,14 @@ export function eligibleModels(
 ): ModelEntry[] {
 	const present = config.models.filter((entry) => entry.enabled !== false && registry.find(entry.provider, entry.id));
 	if (requiredTokens == null) return present;
+	const excluded: string[] = [];
 	const fits = present.filter((entry) => {
 		const win = registry.find(entry.provider, entry.id)?.contextWindow;
-		return typeof win !== "number" || win >= requiredTokens;
+		if (typeof win === "number" && win < requiredTokens) {
+			excluded.push(composite(entry));
+			return false;
+		}
+		return true;
 	});
 	if (fits.length === 0) {
 		console.error(
@@ -1107,11 +1112,11 @@ export function eligibleModels(
 		);
 		return present;
 	}
-	for (const entry of present) {
-		const win = registry.find(entry.provider, entry.id)?.contextWindow;
-		if (typeof win === "number" && win < requiredTokens) {
-			console.error(`${LOG_PREFIX} context window: excluding ${composite(entry)} (${win} < ~${requiredTokens} tokens)`);
-		}
+	if (excluded.length > 0) {
+		const plural = excluded.length === 1 ? "" : "s";
+		console.error(
+			`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
+		);
 	}
 	return fits;
 }
