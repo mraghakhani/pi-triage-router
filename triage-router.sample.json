@@ -91,7 +91,6 @@
     "provider": "litellm",
     "model": "typesafe/jev-1.13",
     "protocol": "systemone",
-    "baseUrl": "https://litellm.example.com/v1",
     "timeoutMs": 5000,
     "maxInputTokens": 28672,
     "failurePolicy": "deterministic",

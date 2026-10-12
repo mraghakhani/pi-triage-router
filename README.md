@@ -73,7 +73,8 @@ $EDITOR ~/.pi/agent/triage-router.json
 
 `laya/auto` is fully local and free - nothing to configure. `jev/auto` needs
 `LITELLM_API_KEY` in the environment, or a `litellm.key` entry in
-`~/.pi/agent/auth.json`. Benchmark refreshes work keyless against OpenRouter.
+`~/.pi/agent/auth.json` (which also carries the litellm `baseUrl`). Benchmark
+refreshes work keyless against OpenRouter.
 If your network needs a proxy, set `httpProxy` in `~/.pi/agent/settings.json`.
 
 ## How routing works
@@ -225,11 +226,10 @@ per (re)load and skipped; the router keeps working with the valid entries.
     "provider": "litellm",   // "openrouter" | "litellm"
     "model": "typesafe/jev-1.13",
     "protocol": "systemone", // "systemone" (LiteLLM) | "decisions" (OpenRouter)
-    "baseUrl": "https://your-litellm/v1", // required for litellm; null = OpenRouter defaults
     "timeoutMs": 5000,
     "maxInputTokens": 28672, // Jev state room: 32k (state+question) limit, 28k leaves 4k for questions
     "failurePolicy": "deterministic",
-    "apiKeyEnv": "LITELLM_API_KEY" // env first, then auth.json["litellm"].key
+    "apiKeyEnv": "LITELLM_API_KEY" // env first, then auth.json["litellm"].key; base URL from auth.json["litellm"]
   },
 
   "benchmarks": {            // OpenRouter benchmark cache
@@ -288,7 +288,7 @@ always explicit and visible, never silent.
 | | `provider: "local"` (default) | `provider: "openrouter"` | `provider: "litellm"` |
 |---|---|---|---|
 | Engine | Laya ONNX in-process | OpenRouter **Decisions API** with Jev (`typesafe/jev-1.13`) | TypeSafe **System One** protocol (`/systemone`) through a LiteLLM proxy |
-| Endpoint | - | `openrouter.ai/api/alpha/decisions` | `{baseUrl}/systemone` (verified live, incl. `/v1/systemone`) |
+| Endpoint | - | `openrouter.ai/api/alpha/decisions` | `{baseUrl}/systemone` (verified live, incl. `/v1/systemone`); `baseUrl` from the auth file |
 | Cost | free, no API key | input-priced per call; `usage.cost` reported per call and logged as actual | same - LiteLLM fronts TypeSafe/OpenRouter and reports actual cost |
 | Proxy | none | settings.json `httpProxy` / env | works direct and via proxy (loopback hosts are never proxied) |
 
@@ -297,7 +297,6 @@ always explicit and visible, never silent.
   "provider": "litellm",       // "openrouter" | "litellm" (remote only; local stays with laya/auto)
   "model": "typesafe/jev-1.13",
   "protocol": "systemone",    // "systemone" (LiteLLM/OpenRouter) | "decisions" (OpenRouter)
-  "baseUrl": "https://your-litellm-proxy/v1",  // required for litellm; null = OpenRouter defaults
   "timeoutMs": 5000, "maxInputTokens": 28672,
   "failurePolicy": "deterministic",
   "apiKeyEnv": "LITELLM_API_KEY",   // optional; see credentials below
@@ -313,6 +312,12 @@ catalog choices).
 file (`~/.pi/agent/auth.json`, keyed by provider name - `"openrouter"` or
 `"litellm"`). A selected remote backend without credentials is a loud,
 non-fatal startup problem and follows `failurePolicy` at runtime.
+
+**Base URL** (remote backends): also read from the auth file's provider entry -
+never from this plugin's config, so private endpoints stay out of shared config
+files. Set `"baseUrl"` on the entry (or any `env.<NAME>_BASE_URL` string, e.g.
+`"env": { "LITELLM_BASE_URL": "https://your-litellm" }`); without one, the
+OpenRouter defaults for the protocol are used.
 
 **Proxy**: explicit `"direct"` = never proxy; otherwise settings.json
 `httpProxy` (e.g. `http://127.0.0.1:10808`), then env proxies. Loopback

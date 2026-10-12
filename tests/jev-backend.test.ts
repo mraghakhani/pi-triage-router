@@ -17,6 +17,7 @@ import {
 	DECISIONS_URL,
 	isLoopbackUrl,
 	resolveApiKey,
+	resolveBaseUrl,
 	resolveProxyUrl,
 	hasApiKey,
 	setFetchForTests,
@@ -28,7 +29,13 @@ import { testConfig, makeCtx, routeRequest, mockClassifier } from "./fixtures.ts
 const TMP = mkdtempSync(join(tmpdir(), "laya-jev-test-"));
 const NO_AUTH = join(TMP, "missing-auth.json");
 const AUTH_FILE = join(TMP, "auth.json");
-writeFileSync(AUTH_FILE, JSON.stringify({ litellm: { key: "tmp-litellm-key" }, openrouter: { key: "tmp-or-key" } }));
+writeFileSync(
+	AUTH_FILE,
+	JSON.stringify({
+		litellm: { key: "tmp-litellm-key", baseUrl: "https://litellm.example.com/v1" },
+		openrouter: { key: "tmp-or-key" },
+	}),
+);
 
 function withSettings(httpProxy: string | null): string {
 	const path = join(TMP, `settings-${Math.random().toString(36).slice(2)}.json`);
@@ -106,6 +113,23 @@ test("resolveApiKey: env wins, auth file fills in, missing stays null", () => {
 	assert.ok(!hasApiKey("LITELLM_API_KEY", "litellm", NO_AUTH));
 });
 
+test("resolveBaseUrl: entry.baseUrl wins, env.<NAME>_BASE_URL falls back, missing stays null", () => {
+	const FILE = join(TMP, "baseurl-auth.json");
+	writeFileSync(
+		FILE,
+		JSON.stringify({
+			litellm: { key: "k", baseUrl: "https://explicit.example.com/v1" },
+			openrouter: { key: "k", env: { LITELLM_BASE_URL: "https://envvar.example.com" } },
+			openai: { key: "k" },
+		}),
+	);
+	assert.equal(resolveBaseUrl("litellm", FILE), "https://explicit.example.com/v1");
+	assert.equal(resolveBaseUrl("openrouter", FILE), "https://envvar.example.com", "env-shaped entries are honored");
+	assert.equal(resolveBaseUrl("openai", FILE), null, "no base URL = OpenRouter defaults");
+	assert.equal(resolveBaseUrl("nonexistent", FILE), null);
+	assert.equal(resolveBaseUrl("litellm", NO_AUTH), null, "missing auth file = OpenRouter defaults");
+});
+
 // ---------------------------------------------------------------------------
 // jev section validation
 // ---------------------------------------------------------------------------
@@ -120,13 +144,13 @@ test("jev section: absent = null (no virtual model), present = remote defaults",
 	assert.equal(withDefault.jev?.model, "typesafe/jev-1.13");
 });
 
-test("jev section: litellm accepted with baseUrl; provider \"local\" rejected; unknown keys reported", () => {
+test("jev section: litellm accepted, baseUrl is not a config key; provider \"local\" rejected; unknown keys reported", () => {
 	const config = router.validateConfig({
 		models: [],
 		jev: { provider: "litellm", model: "typesafe/jev-1.13", protocol: "systemone", baseUrl: "https://l/v1", bogus: 1 },
 	});
 	assert.equal(config.jev?.provider, "litellm");
-	assert.equal(config.jev?.baseUrl, "https://l/v1");
+	assert.ok(config.problems.some((p) => p.includes('"jev": unknown key "baseUrl"')), "base URLs live in the auth file, never in config");
 	assert.ok(config.problems.some((p) => p.includes('"jev": unknown key "bogus"')));
 
 	const local = router.validateConfig({ models: [], jev: { provider: "local" } });
@@ -139,14 +163,14 @@ test("jev section: litellm accepted with baseUrl; provider \"local\" rejected; u
 
 test("jev section without credentials: explicit non-fatal startup problem mentioning jev", () => {
 	setRuntimePathsForTests({ authFile: NO_AUTH });
-	const config = router.validateConfig({ models: [], jev: { provider: "litellm", baseUrl: "https://l/v1" } });
+	const config = router.validateConfig({ models: [], jev: { provider: "litellm" } });
 	assert.ok(
 		config.problems.some((p) => p.startsWith("jev provider") && p.includes("still starts")),
 		`expected a jev credentials problem, got: ${JSON.stringify(config.problems)}`,
 	);
 	// With the auth file present, no credentials problem for jev.
 	setRuntimePathsForTests({ authFile: AUTH_FILE });
-	const okConfig = router.validateConfig({ models: [], jev: { provider: "litellm", baseUrl: "https://l/v1" } });
+	const okConfig = router.validateConfig({ models: [], jev: { provider: "litellm" } });
 	assert.ok(!okConfig.problems.some((p) => p.startsWith("jev provider")));
 });
 
@@ -172,7 +196,6 @@ function jevConfig(overrides: Record<string, unknown> = {}) {
 			provider: "litellm",
 			model: "typesafe/jev-1.13",
 			protocol: "systemone",
-			baseUrl: "https://litellm.example.com/v1",
 			apiKeyEnv: "LITELLM_API_KEY",
 			...overrides,
 		},
@@ -192,7 +215,7 @@ test("getClassifier(config, \"jev\"): litellm handle, systemone endpoint, auth-f
 		return { ok: true, status: 200, json: async () => JEV_BODY } as never;
 	});
 	await handle.classifier?.systemOne({ role: "r", prompt: "p" }, {});
-	assert.equal(seen[0].url, "https://litellm.example.com/v1/systemone");
+	assert.equal(seen[0].url, "https://litellm.example.com/v1/systemone", "endpoint resolved from the auth file's litellm entry");
 	assert.equal(seen[0].auth, "Bearer tmp-litellm-key", "auth file key, never logged");
 	assert.equal(handle.lastCall?.cost, 0.00004, "provider-reported actual cost captured");
 });

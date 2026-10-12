@@ -47,6 +47,7 @@ import {
 	classifierEndpoint,
 	hasApiKey,
 	resolveApiKey,
+	resolveBaseUrl,
 	resolveProxyUrl,
 	RemoteClassifierError,
 } from "./triage-router-lib/triage-router-openrouter.ts";
@@ -130,9 +131,7 @@ export interface ClassifierConfig {
 	/** Remote wire protocol: "decisions" (OpenRouter /api/alpha/decisions) or "systemone"
 	 * (TypeSafe native /systemone - served by OpenRouter and LiteLLM proxies). */
 	protocol: "decisions" | "systemone";
-	/** Remote base URL (e.g. a LiteLLM proxy). null = the OpenRouter default for the protocol. */
-	baseUrl: string | null;
-	/** Pi auth file for credential fallback lookup (default ~/.pi/agent/auth.json). */
+	/** Pi auth file for credential + base-URL lookup (default ~/.pi/agent/auth.json). */
 	authFile: string | null;
 	/** Classification timeout in ms (local inference and each remote attempt). Default 5000. */
 	timeoutMs: number;
@@ -298,7 +297,7 @@ const KNOWN_CONFIG_KEYS = new Set([
 	"benchmarks",
 	"scoring",
 ]);
-const CLASSIFIER_KEYS = new Set(["provider", "model", "protocol", "baseUrl", "authFile", "timeoutMs", "maxInputTokens", "localPrompt", "remotePrompt", "failurePolicy", "apiKeyEnv", "proxyUrl"]);
+const CLASSIFIER_KEYS = new Set(["provider", "model", "protocol", "authFile", "timeoutMs", "maxInputTokens", "localPrompt", "remotePrompt", "failurePolicy", "apiKeyEnv", "proxyUrl"]);
 const BENCHMARK_KEYS = new Set(["enabled", "source", "cachePath", "refreshIntervalMs", "staleAfterMs", "timeoutMs", "apiKeyEnv", "proxyUrl"]);
 const SCORING_KEYS = new Set(["enabled", "missingPolicy", "missingPenalty", "stalePolicy", "expectedInputTokens", "expectedOutputTokens", "complexityQualityDelta", "classifierWeight", "weights"]);
 const CAPABILITY_KEYS = new Set(["coding", "reasoning", "agentic", "infra", "taskSuccess", "research"]);
@@ -386,7 +385,6 @@ function defaultClassifier(timeoutMs: number): ClassifierConfig {
 		apiKeyEnv: "OPENROUTER_API_KEY",
 		proxyUrl: null,
 		protocol: "decisions",
-		baseUrl: null,
 		authFile: null,
 	};
 }
@@ -499,11 +497,6 @@ export function validateConfig(raw: unknown): RouterConfig {
 		if (c.protocol !== undefined) {
 			if (c.protocol === "decisions" || c.protocol === "systemone") target.protocol = c.protocol;
 			else problems.push(`"${label}.protocol" must be "decisions" or "systemone"`);
-		}
-		if (c.baseUrl !== undefined) {
-			if (c.baseUrl === null || (typeof c.baseUrl === "string" && c.baseUrl.trim() !== "")) {
-				target.baseUrl = (c.baseUrl as string | null) ?? null;
-			} else problems.push(`"${label}.baseUrl" must be a non-empty string or null`);
 		}
 		if (c.authFile !== undefined) {
 			if (c.authFile === null || (typeof c.authFile === "string" && c.authFile.trim() !== "")) {
@@ -1037,7 +1030,9 @@ export async function getClassifier(
 		return { kind: "local", model: "laya", classifier, lastCall: null };
 	}
 	const label = cfg.provider === "litellm" ? "LiteLLM" : "OpenRouter";
-	const endpoint = classifierEndpoint(cfg.protocol, cfg.baseUrl);
+	// Base URL comes from the Pi auth file's provider entry (never plugin config,
+	// so private endpoints stay out of shared config files); null = OpenRouter default.
+	const endpoint = classifierEndpoint(cfg.protocol, resolveBaseUrl(cfg.provider, cfg.authFile));
 	const handle: ClassifierHandle = { kind: cfg.provider, model: cfg.model, classifier: null, lastCall: null };
 	handle.classifier = {
 		systemOne: async (input, questions) => {

@@ -219,6 +219,31 @@ export function resolveApiKey(apiKeyEnv: string, provider: string, authFile?: st
 	return null;
 }
 
+/**
+ * Base URL for a remote classifier backend, read from Pi's auth file entry for
+ * the provider - never from plugin config, so private endpoints stay out of
+ * shared config files. Accepted shapes: `entry.baseUrl` (string) or any
+ * `entry.env.<NAME>_BASE_URL` string (e.g. "LITELLM_BASE_URL").
+ * Returns null when the entry has none; the caller then uses the OpenRouter
+ * default for the protocol.
+ */
+export function resolveBaseUrl(provider: string, authFile?: string | null): string | null {
+	const auth = readJsonFile(authFile ?? defaultAuthFile());
+	const entry = auth?.[provider];
+	if (typeof entry !== "object" || entry === null) return null;
+	const e = entry as Record<string, unknown>;
+	if (typeof e.baseUrl === "string" && e.baseUrl.trim() !== "") return e.baseUrl.trim();
+	const env = e.env;
+	if (typeof env === "object" && env !== null) {
+		for (const [name, value] of Object.entries(env as Record<string, unknown>)) {
+			if (/_BASE_URL$/iu.test(name) && typeof value === "string" && value.trim() !== "") {
+				return value.trim();
+			}
+		}
+	}
+	return null;
+}
+
 /** Whether credentials exist without revealing them (startup validation). */
 export function hasApiKey(apiKeyEnv: string, provider: string, authFile?: string | null): boolean {
 	if (process.env[apiKeyEnv]?.trim()) return true;
