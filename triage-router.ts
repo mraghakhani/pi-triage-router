@@ -1697,6 +1697,14 @@ function safeContextTokens(ctx: ExtensionContext): number | null {
 // ---------------------------------------------------------------------------
 
 export default function (pi: ExtensionAPI) {
+	// Virtual models are the whole point of this extension; on older pi builds the
+	// API is absent and the default load error would be a bare "not a function".
+	if (typeof pi.registerVirtualModel !== "function") {
+		throw new Error(
+			"pi-triage-router needs the virtual models API (pi.registerVirtualModel, added in pi 0.99.0). " +
+				"Upgrade pi (e.g. `npm install -g @earendil-works/pi-coding-agent@latest` or `brew upgrade pi-coding-agent`) and restart.",
+		);
+	}
 	const meta = {
 		thinkingLevels: ["off", "low", "medium", "high"] as ["off", "low", "medium", "high"],
 		// Shown before the first response; the physical model's limits take over.

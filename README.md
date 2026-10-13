@@ -580,6 +580,9 @@ and acceptable model tiers. `tests/laya-eval.test.ts`:
 
 ## Requirements / installation
 
+- `pi` 0.99.0+ (the virtual-models API this extension is built on; check with
+  `pi --version` - older builds fail the extension load with "pi.registerVirtualModel
+  is not a function").
 - Node.js 20+ (runs fine on 26), ~2 GB RAM for the local classifier.
 - `npm install` **next to `package.json` inside the dotfiles repo**
   (`~/dotfiles/pi/.pi/agent/extensions/`), not in `~/.pi/agent/extensions`.
