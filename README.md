@@ -37,13 +37,14 @@ access, so on a restricted or proxied network the download dies with
 `socket hang up` and aborts the whole install.
 
 That is safe to skip: the CPU binaries every platform needs ship inside the
-npm tarball, and Laya runs CPU inference. This package therefore **denies**
-that script via `allowScripts` in `package.json`, and ships a `.npmrc` that
-tells the script to self-skip if it does run (the two cover different npm
-generations). If neither applies, set the flag explicitly:
+npm tarball, and Laya runs CPU inference. For `git:` installs this package
+ships a root `.npmrc` with `onnxruntime-node-install=skip`, which npm reads
+inside the cloned directory, so the postinstall self-skips. For `npm:`
+installs (the tarball cannot carry an `.npmrc`), set the flag explicitly via
+the environment:
 
 ```sh
-ONNXRUNTIME_NODE_INSTALL=skip pi install git:github.com/mraghakhani/pi-triage-router
+ONNXRUNTIME_NODE_INSTALL=skip pi install npm:pi-triage-router
 ```
 
 ### Where files live
