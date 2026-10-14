@@ -1,6 +1,6 @@
 {
   "name": "pi-triage-router",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Model triage for Pi: a local or remote classifier sorts each request by category and complexity, then a deterministic benchmark-and-price policy picks the execution model.",
   "keywords": [
     "pi-package",
