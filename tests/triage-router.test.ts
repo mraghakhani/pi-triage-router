@@ -6,6 +6,7 @@
  */
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import * as router from "../triage-router.ts";
 import type { CapturedVirtualModel } from "./capture.ts";
 import { captureRoute } from "./capture.ts";
@@ -933,6 +934,26 @@ test("oversized descriptions are flagged so criteria stay inside Laya's head bud
 	const shipped = router.validateConfig(JSON.parse(readFileSync(new URL("../triage-router.json", import.meta.url), "utf8")));
 	assert.equal(shipped.problems.filter((p) => p.includes("short sentence")).length, 0, "shipped descriptions pass the guard");
 });
+
+test("shipped configs' default/override are provider/id composites of configured models", () => {
+	// "default" and "override" are matched against composite(entry) = "provider/id".
+	// A bare model id (e.g. "deepseek/deepseek-v4-flash") never matches, silently
+	// downgrades every fallback to cheapest, and warns on each compaction.
+	for (const file of ["triage-router.json", "triage-router.sample.json"]) {
+		const cfg = router.validateConfig(
+			JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8")),
+		);
+		for (const [field, value] of [
+			["default", cfg.defaultModel],
+			["override", cfg.override],
+		] as const) {
+			if (value == null) continue;
+			const known = cfg.models.some((m) => `${m.provider}/${m.id}` === value);
+			assert.ok(known, `${file} ${field} "${value}" matches provider/id of a configured model`);
+		}
+	}
+});
+
 test("stuck local load (first-run download): request is bounded, deterministic fallback, TUI status explains", async () => {
 	// A first laya/auto run downloads ~2 GB of ONNX weights from Hugging Face.
 	// If that hangs (cold cache, blocked network), the request must NOT hang

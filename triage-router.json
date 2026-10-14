@@ -78,7 +78,7 @@
       "priceOut": 6.0
     }
   ],
-  "default": "deepseek/deepseek-v4-flash",
+  "default": "litellm/deepseek/deepseek-v4-flash",
   "override": null,
   "fallback": "cheapest",
   "classifier": {
