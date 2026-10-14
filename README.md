@@ -15,10 +15,10 @@ pi --model laya/auto
 ## Install
 
 ```sh
-pi install git:github.com/mraghakhani/pi-triage-router
+pi install npm:pi-triage-router
 ```
 
-That is the whole install: pi clones the package, installs its runtime
+That is the whole install: pi pulls the package, installs its runtime
 dependencies (`@receptron/laya`, `undici`) and registers `triage-router.ts`.
 No setup script, no symlink. Restart pi, then confirm it loads:
 
@@ -26,7 +26,7 @@ No setup script, no symlink. Restart pi, then confirm it loads:
 pi --model laya/auto -p "reply ok"
 ```
 
-Remove it with `pi remove git:github.com/mraghakhani/pi-triage-router`.
+Remove it with `pi remove npm:pi-triage-router`.
 
 #### If install fails on `linux/x64`
 
@@ -37,27 +37,27 @@ access, so on a restricted or proxied network the download dies with
 `socket hang up` and aborts the whole install.
 
 That is safe to skip: the CPU binaries every platform needs ship inside the
-npm tarball, and Laya runs CPU inference. For `git:` installs this package
-ships a root `.npmrc` with `onnxruntime-node-install=skip`, which npm reads
-inside the cloned directory, so the postinstall self-skips. For `npm:`
-installs (the tarball cannot carry an `.npmrc`), set the flag explicitly via
-the environment:
+npm tarball, and Laya runs CPU inference. Set the flag via the environment:
 
 ```sh
 ONNXRUNTIME_NODE_INSTALL=skip pi install npm:pi-triage-router
 ```
 
+If you are installing from the git clone (dev build), the repo ships a root
+`.npmrc` with `onnxruntime-node-install=skip` that npm reads inside the
+cloned directory — the download self-skips without the env var.
+
 ### Where files live
 
-Sources land in different directories (`git:` under `~/.pi/agent/git/...`,
-`npm:` under `~/.pi/agent/npm/node_modules/...`) - the rows below are for the
-git install:
+Sources land in different directories (`npm:` under
+`~/.pi/agent/npm/node_modules/...`, `git:` under `~/.pi/agent/git/...`). The
+rows below are for the **npm** install:
 
 | What | Path | Edit it? |
 |---|---|---|
 | Config | `~/.pi/agent/triage-router.json` | **yes - the only file you edit** |
-| Bundled defaults | `~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
-| Benchmark cache | `~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.benchmarks.json` | no - regenerated automatically |
+| Bundled defaults | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
+| Benchmark cache | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.benchmarks.json` | no - regenerated automatically |
 | Laya weights (~2 GB) | `~/.cache/receptron-laya` | no - downloaded on first use |
 
 Resolution order is `TRIAGE_ROUTER_CONFIG` > `~/.pi/agent/triage-router.json` >
@@ -65,7 +65,7 @@ bundled `triage-router.json`, so your edits always survive `pi update`. To
 customise:
 
 ```sh
-cp ~/.pi/agent/git/github.com/mraghakhani/pi-triage-router/triage-router.json \
+cp ~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json \
    ~/.pi/agent/triage-router.json
 $EDITOR ~/.pi/agent/triage-router.json
 ```
@@ -532,8 +532,12 @@ cost of D but 0.39x the cost of E.
 
 ## Tests
 
+The test suite lives in the [git repository](https://github.com/mraghakhani/pi-triage-router)
+(the npm tarball omits test files). Clone the repo or install via git:
+
 ```sh
-cd ~/.pi/agent/extensions
+pi install git:github.com/mraghakhani/pi-triage-router
+cd ~/.pi/agent/git/github.com/mraghakhani/pi-triage-router
 
 # Unit suites (deterministic, mocked classifier/fetch, no Laya load, no network)
 node --test tests/triage-router.test.ts         # core routing, config validation
@@ -623,7 +627,11 @@ bash ~/dotfiles/pi/.pi/agent/extensions/triage-router.setup.sh   # idempotent; r
 #   (pass --skip-weights to set up files/deps without touching the weights)
 ```
 
-### Syncing to your other machines (dotfiles)
+### Advanced: symlinks from a dotfiles repo (local dev)
+
+This setup is for developers who track their pi config in a dotfiles repo.
+For a standard `npm:` install you don't need it — pi manages everything under
+`~/.pi/agent/npm/node_modules/pi-triage-router/`.
 
 The runtime files live in the dotfiles repo and are symlinked locally:
 
