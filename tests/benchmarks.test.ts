@@ -205,6 +205,23 @@ test("refresh success writes an atomic cache the router can read", async () => {
 	assert.equal(dataset.source, "openrouter");
 });
 
+test("readDataset serves the bundled seed while the agent-dir cache does not exist yet", async () => {
+	const main = join(dir, "absent.json");
+	const seed = join(dir, "seed.json");
+	process.env.OPENROUTER_API_KEY = "test-key";
+	setFetchForTests(fetchReturning(UNIFIED_PAYLOAD));
+	await refreshBenchmarks(benchConfig({ cachePath: seed }), IDS);
+	assert.ok(existsSync(seed));
+	// No seed configured: missing cache stays missing.
+	assert.equal(readDataset(main), null);
+	// Seed configured: first reads get data before the first refresh lands.
+	const seeded = readDataset(main, seed);
+	assert.ok(seeded);
+	assert.equal(seeded.models["z-ai/glm-5.3"].coding, 75);
+	// Seed equal to the main path never recurses into itself.
+	assert.equal(readDataset(main, main), null);
+});
+
 test("refresh failure keeps the last known good cache byte-for-byte", async () => {
 	process.env.OPENROUTER_API_KEY = "test-key";
 	setFetchForTests(fetchReturning(UNIFIED_PAYLOAD));
@@ -574,7 +591,7 @@ test("the reported Jev case: a zero-probability model no longer wins on benchmar
 	assert.deepEqual(cfg.problems, [], "shipped config validates");
 	assert.ok(cfg.scoring.classifierWeight > 0, "shipped config opts into the blend");
 	const eligible = cfg.models.filter((m) => m.enabled !== false);
-	const dataset = readDataset(cfg.benchmarks.cachePath);
+	const dataset = readDataset(cfg.benchmarks.cachePath, cfg.benchmarks.seedPath);
 	assert.ok(dataset, "benchmark cache present");
 
 	// Exact answers from a real typesafe/jev-1.13 /systemone response.

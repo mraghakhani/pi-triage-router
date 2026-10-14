@@ -151,11 +151,19 @@ export function setRuntimePathsForTests(paths: { settingsPath?: string | null; a
 }
 
 export function defaultSettingsPath(): string {
-	return settingsPathForTests ?? join(homedir(), ".pi", "agent", "settings.json");
+	return settingsPathForTests ?? join(piAgentDir(), "settings.json");
 }
 
 export function defaultAuthFile(): string {
-	return authFileForTests ?? join(homedir(), ".pi", "agent", "auth.json");
+	return authFileForTests ?? join(piAgentDir(), "auth.json");
+}
+
+/**
+ * Pi's agent dir. Default `~/.pi/agent`, overridable with the documented
+ * `PI_CODING_AGENT_DIR` environment variable (pi docs: environment-variables).
+ */
+export function piAgentDir(): string {
+	return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
 }
 
 function readJsonFile(path: string): Record<string, unknown> | null {

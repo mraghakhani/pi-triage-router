@@ -20,7 +20,6 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Message, Usage } from "@earendil-works/pi-ai";
@@ -46,6 +45,7 @@ import {
 	callDecisions,
 	classifierEndpoint,
 	hasApiKey,
+	piAgentDir,
 	resolveApiKey,
 	resolveBaseUrl,
 	resolveProxyUrl,
@@ -65,7 +65,7 @@ const LOG_PREFIX = "[pi-triage-router]";
  * The extensions-dir slot covers installs that predate packaging.
  */
 export function configCandidates(): string[] {
-	const home = join(homedir(), ".pi", "agent");
+	const home = piAgentDir();
 	const list = [
 		process.env.TRIAGE_ROUTER_CONFIG,
 		join(home, "triage-router.json"),
@@ -394,7 +394,8 @@ function defaultBenchmarks(): BenchmarkConfig {
 	return {
 		enabled: true,
 		source: "openrouter",
-		cachePath: join(HERE, "triage-router.benchmarks.json"),
+		cachePath: join(piAgentDir(), "triage-router.benchmarks.json"),
+		seedPath: join(HERE, "triage-router.benchmarks.json"),
 		refreshIntervalMs: 86_400_000,
 		staleAfterMs: 2_592_000_000,
 		timeoutMs: 15_000,
@@ -1656,7 +1657,7 @@ export async function classifyAndDecide(
 				};
 	const scoreContext: ScoreContext | undefined = config.scoring.enabled
 		? {
-				dataset: readDataset(config.benchmarks.cachePath),
+				dataset: readDataset(config.benchmarks.cachePath, config.benchmarks.seedPath),
 				estimatedCost: (entry: ModelEntry) => {
 					const reg = ctx.modelRegistry.find(entry.provider, entry.id);
 					const pIn = reg?.cost?.input ?? entry.priceIn;

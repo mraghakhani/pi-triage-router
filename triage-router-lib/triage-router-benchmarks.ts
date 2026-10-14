@@ -45,8 +45,10 @@ export interface BenchmarkConfig {
 	enabled: boolean;
 	/** Data source: "openrouter" (unified, key required) | "openrouter-models" (public). */
 	source: "openrouter" | "openrouter-models";
-	/** Cache file path. Default: triage-router.benchmarks.json next to the config. */
+	/** Cache file path. Default: `triage-router.benchmarks.json` in the Pi agent dir (PI_CODING_AGENT_DIR-aware), outside the package so `pi update` never wipes it. */
 	cachePath: string;
+	/** Internal: bundled snapshot read as a fallback until the cache file exists. Never set via config JSON. */
+	seedPath?: string;
 	/** Minimum age before a background refresh is attempted. Default 24h. */
 	refreshIntervalMs: number;
 	/** Datasets older than this are stale: handled per scoring.stalePolicy. Default 30d. */
@@ -526,7 +528,16 @@ export function parseDataset(raw: unknown): BenchmarkDataset | null {
 // mtime-cached reads: routing may consult the dataset twice per request.
 let readCache: { path: string; mtimeMs: number; dataset: BenchmarkDataset | null } | null = null;
 
-export function readDataset(cachePath: string): BenchmarkDataset | null {
+export function readDataset(cachePath: string, seedPath?: string): BenchmarkDataset | null {
+	const dataset = readOne(cachePath);
+	if (dataset) return dataset;
+	// First reads on a packaged install: the agent-dir cache does not exist yet,
+	// so serve the snapshot bundled with the package instead of nothing.
+	if (seedPath && seedPath !== cachePath) return readOne(seedPath);
+	return null;
+}
+
+function readOne(cachePath: string): BenchmarkDataset | null {
 	try {
 		if (!existsSync(cachePath)) return null;
 		const mtimeMs = statSync(cachePath).mtimeMs;
@@ -665,7 +676,7 @@ export async function refreshBenchmarks(
 		writeDataset(config.cachePath, dataset);
 		return { ok: true, dataset, error: null };
 	} catch (err) {
-		return { ok: false, dataset: readDataset(config.cachePath), error: err instanceof Error ? err.message : String(err) };
+		return { ok: false, dataset: readDataset(config.cachePath, config.seedPath), error: err instanceof Error ? err.message : String(err) };
 	}
 }
 
@@ -737,7 +748,7 @@ export function datasetAgeMs(cachePath: string, now = Date.now): number | null {
 
 /** Freshness/coverage summary for diagnostics logging. */
 export function datasetStatus(config: BenchmarkConfig, ids: string[]): string {
-	const dataset = readDataset(config.cachePath);
+	const dataset = readDataset(config.cachePath, config.seedPath);
 	if (!dataset) return "bench=absent";
 	const ageMs = Math.max(0, Date.now() - Date.parse(dataset.fetchedAt));
 	const covered = ids.filter((id) => {

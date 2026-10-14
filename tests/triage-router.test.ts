@@ -7,7 +7,11 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as router from "../triage-router.ts";
+import { piAgentDir } from "../triage-router-lib/triage-router-openrouter.ts";
 import type { CapturedVirtualModel } from "./capture.ts";
 import { captureRoute } from "./capture.ts";
 import {
@@ -951,6 +955,38 @@ test("shipped configs' default/override are provider/id composites of configured
 			const known = cfg.models.some((m) => `${m.provider}/${m.id}` === value);
 			assert.ok(known, `${file} ${field} "${value}" matches provider/id of a configured model`);
 		}
+	}
+});
+
+test("benchmark cache and config paths live in the pi agent dir, PI_CODING_AGENT_DIR-aware", () => {
+	const shipped = router.validateConfig(JSON.parse(readFileSync(new URL("../triage-router.json", import.meta.url), "utf8")));
+	const pkgDir = dirname(fileURLToPath(new URL("../triage-router.json", import.meta.url)));
+	assert.ok(
+		!shipped.benchmarks.cachePath.startsWith(pkgDir),
+		"default benchmark cache is outside the package dir (pi update wipes package contents)",
+	);
+	assert.ok(
+		shipped.benchmarks.seedPath !== undefined && shipped.benchmarks.seedPath.startsWith(pkgDir),
+		"bundled snapshot is the read fallback until the first refresh",
+	);
+	const saved = process.env.PI_CODING_AGENT_DIR;
+	try {
+		process.env.PI_CODING_AGENT_DIR = join(tmpdir(), "pi-agent-override-test");
+		const overridden = router.validateConfig(
+			JSON.parse(readFileSync(new URL("../triage-router.sample.json", import.meta.url), "utf8")),
+		);
+		assert.equal(
+			overridden.benchmarks.cachePath,
+			join(process.env.PI_CODING_AGENT_DIR, "triage-router.benchmarks.json"),
+		);
+		assert.ok(
+			router.configCandidates().includes(join(process.env.PI_CODING_AGENT_DIR, "triage-router.json")),
+			"user config candidate honors PI_CODING_AGENT_DIR",
+		);
+		assert.equal(piAgentDir(), process.env.PI_CODING_AGENT_DIR);
+	} finally {
+		if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = saved;
 	}
 });
 

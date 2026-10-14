@@ -57,7 +57,7 @@ rows below are for the **npm** install:
 |---|---|---|
 | Config | `~/.pi/agent/triage-router.json` | **yes - the only file you edit** |
 | Bundled defaults | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
-| Benchmark cache | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.benchmarks.json` | no - regenerated automatically |
+| Benchmark cache | `~/.pi/agent/triage-router.benchmarks.json` | no - regenerated automatically |
 | Laya weights (~2 GB) | `~/.cache/receptron-laya` | no - downloaded on first use |
 
 Resolution order is `TRIAGE_ROUTER_CONFIG` > `~/.pi/agent/triage-router.json` >
@@ -396,9 +396,14 @@ Sources (documented machine-readable endpoints, all verified live):
 
 Behavior:
 
-- **Cached locally** in `triage-router.benchmarks.json` next to the config;
-  routing NEVER fetches per decision. The shipped cache was fetched
-  2026-10-09 (`as_of` preserved inside).
+- **Cached locally** in `~/.pi/agent/triage-router.benchmarks.json` (the Pi
+  agent dir, `PI_CODING_AGENT_DIR`-aware); routing NEVER fetches per decision.
+  The package ships a bundled snapshot (fetched 2026-10-09, `as_of` preserved
+  inside) that serves reads until the first background refresh writes the
+  agent-dir cache - so `pi update` can never wipe your benchmark data.
+  Override the location with `benchmarks.cachePath`.
+- Config candidates (`TRIAGE_ROUTER_CONFIG` env > `~/.pi/agent/triage-router.json` >
+  legacy extensions-dir path > bundled defaults) honor `PI_CODING_AGENT_DIR`.
 - **Background refresh** at most once per `refreshIntervalMs`, fire-and-forget
   (routing never waits on it). Failures (timeout, 429, malformed body,
   unreachable) keep the **last known good** dataset byte-for-byte.
