@@ -78,6 +78,8 @@ export interface DecisionCallOptions {
 	fetchImpl?: FetchLike;
 	/** Total attempt cap (default 2: first attempt + one bounded retry). */
 	maxAttempts?: number;
+	/** Delay in ms between attempts (default 0). Applies only when retrying. */
+	retryDelayMs?: number;
 }
 
 /** Thrown for every remote-classification failure; message never contains credentials. */
@@ -273,6 +275,10 @@ export async function makeFetch(proxyUrl?: string | null, provided?: FetchLike):
 	return bound;
 }
 
+function sleep(ms: number): Promise<void> {
+	return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
 function isRetryable(status: number | null, err: unknown): boolean {
 	if (status === 429) return true;
 	if (status !== null && status >= 500) return true;
@@ -348,12 +354,14 @@ export function parseUsage(raw: unknown): RemoteUsage {
  * One bounded classification call. Retries at most `maxAttempts` times, only
  * on rate limits, server errors, and network failures - and never switches
  * provider or model on failure. Every error message is credential-free.
+ * Between attempts it waits `retryDelayMs` (default 0).
  */
 export async function callDecisions(opts: DecisionCallOptions): Promise<RemoteCallResult> {
 	const doFetch = await makeFetch(opts.proxyUrl, opts.fetchImpl);
 	const url = opts.endpoint ?? DECISIONS_URL;
 	const label = opts.providerLabel ?? "OpenRouter";
-	const maxAttempts = Math.max(1, opts.maxAttempts ?? 2);
+	const maxAttempts = Math.max(1, opts.maxAttempts ?? 1);
+	const retryDelayMs = Math.max(0, opts.retryDelayMs ?? 0);
 	const body = JSON.stringify({
 		model: opts.model,
 		state: { role: opts.role, prompt: opts.prompt },
@@ -380,7 +388,10 @@ export async function callDecisions(opts: DecisionCallOptions): Promise<RemoteCa
 			if (!response.ok) {
 				const text = await response.text().catch(() => "");
 				lastError = describeHttpError(status, text, label);
-				if (attempt < maxAttempts && isRetryable(status, null)) continue;
+				if (attempt < maxAttempts && isRetryable(status, null)) {
+					await sleep(retryDelayMs);
+					continue;
+				}
 				throw lastError;
 			}
 			const payload = (await response.json()) as Record<string, unknown>;
@@ -396,7 +407,10 @@ export async function callDecisions(opts: DecisionCallOptions): Promise<RemoteCa
 		} catch (err) {
 			if (err instanceof RemoteClassifierError) {
 				lastError = err;
-				if (attempt < maxAttempts && isRetryable(err.status, err)) continue;
+				if (attempt < maxAttempts && isRetryable(err.status, err)) {
+					await sleep(retryDelayMs);
+					continue;
+				}
 				throw err;
 			}
 			// Timeout or transport failure (fetch rejects with DOMException/TypeError).
@@ -406,7 +420,10 @@ export async function callDecisions(opts: DecisionCallOptions): Promise<RemoteCa
 					? `classifier request timed out after ${opts.timeoutMs}ms`
 					: `classifier request failed: ${err instanceof Error ? err.message : String(err)}`,
 			);
-			if (attempt < maxAttempts && isRetryable(null, err)) continue;
+			if (attempt < maxAttempts && isRetryable(null, err)) {
+				await sleep(retryDelayMs);
+				continue;
+			}
 			throw lastError;
 		} finally {
 			clearTimeout(timer);

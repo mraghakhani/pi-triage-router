@@ -164,6 +164,31 @@ test("classifier section validates every field with actionable problems", () => 
 	assert.equal(config.classifier.failurePolicy, "deterministic");
 });
 
+test("classifier maxAttempts and retryDelayMs validate with defaults", () => {
+	const bad = router.validateConfig({
+		models: [],
+		classifier: { provider: "local", maxAttempts: 0, retryDelayMs: -1 },
+	});
+	for (const needle of ["maxAttempts", "retryDelayMs"]) {
+		assert.ok(bad.problems.some((p) => p.includes(needle)), `problem mentions ${needle}`);
+	}
+	assert.equal(bad.classifier.maxAttempts, 1, "invalid maxAttempts falls back to default");
+	assert.equal(bad.classifier.retryDelayMs, 0, "invalid retryDelayMs falls back to default");
+
+	const good = router.validateConfig({
+		models: [],
+		classifier: { provider: "local", maxAttempts: 4, retryDelayMs: 250 },
+	});
+	assert.equal(good.classifier.maxAttempts, 4);
+	assert.equal(good.classifier.retryDelayMs, 250);
+	assert.ok(!good.problems.some((p) => p.includes("maxAttempts") || p.includes("retryDelayMs")));
+});
+
+test("classifier maxAttempts defaults to 1 (no retries)", () => {
+	const config = router.validateConfig({ models: [], classifier: { provider: "local" } });
+	assert.equal(config.classifier.maxAttempts, 1, "default is 1");
+});
+
 // ---------------------------------------------------------------------------
 // Transport: structured output, retries, timeouts, credentials
 // ---------------------------------------------------------------------------
@@ -218,7 +243,7 @@ test("HTTP errors: 401 not retried and credential-free; 429 retried exactly once
 
 	const retryCalls: MockCall[] = [];
 	const result = await callDecisions({
-		model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 500, apiKey: "k",
+		model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 500, apiKey: "k", maxAttempts: 2,
 		fetchImpl: responder((_init, i) => (
 			i === 0 ? { ok: false, status: 429, body: {} } : { ok: true, status: 200, body: decisionBody() }
 		), retryCalls),
@@ -239,6 +264,34 @@ test("attempts are bounded: repeated 5xx stops after maxAttempts", async () => {
 	assert.equal(calls.length, 2);
 });
 
+test("retryDelayMs waits between attempts, 0 keeps the old instant retry", async () => {
+	const calls: MockCall[] = [];
+	const stamps: number[] = [];
+	const result = await callDecisions({
+		model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 500, apiKey: "k",
+		maxAttempts: 2,
+		retryDelayMs: 60,
+		fetchImpl: responder((_init, i) => {
+			stamps.push(Date.now());
+			return i === 0 ? { ok: false, status: 429, body: {} } : { ok: true, status: 200, body: decisionBody() };
+		}, calls),
+	});
+	assert.equal(calls.length, 2, "one bounded retry on rate limit");
+	assert.ok(stamps[1] - stamps[0] >= 60, "delay applied between attempts");
+	assert.ok(result.answers.model);
+
+	const instant: MockCall[] = [];
+	const instantStamps: number[] = [];
+	await callDecisions({
+		model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 500, apiKey: "k", maxAttempts: 2,
+		fetchImpl: responder((_init, i) => {
+			instantStamps.push(Date.now());
+			return i === 0 ? { ok: false, status: 429, body: {} } : { ok: true, status: 200, body: decisionBody() };
+		}, instant),
+	});
+	assert.ok(instantStamps[1] - instantStamps[0] < 60, "default 0ms keeps instant retry");
+});
+
 test("timeouts abort the request and report the budget", async () => {
 	const calls: MockCall[] = [];
 	const hanging: FetchLike = (_url, init) => {
@@ -252,7 +305,7 @@ test("timeouts abort the request and report the budget", async () => {
 		});
 	};
 	await assert.rejects(
-		callDecisions({ model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 40, apiKey: "k", fetchImpl: hanging }),
+		callDecisions({ model: "m", role: "r", prompt: "p", questions: {}, timeoutMs: 40, apiKey: "k", maxAttempts: 2, fetchImpl: hanging }),
 		/timed out after 40ms/,
 	);
 	assert.equal(calls.length, 2, "timeout retried once within the attempt cap");

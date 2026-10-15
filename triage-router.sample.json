@@ -84,6 +84,8 @@
   "classifier": {
     "provider": "local",
     "timeoutMs": 5000,
+    "maxAttempts": 1,
+    "retryDelayMs": 0,
     "maxInputTokens": 512,
     "failurePolicy": "deterministic"
   },
@@ -92,6 +94,8 @@
     "model": "typesafe/jev-1.13",
     "protocol": "systemone",
     "timeoutMs": 5000,
+    "maxAttempts": 1,
+    "retryDelayMs": 0,
     "maxInputTokens": 28672,
     "failurePolicy": "deterministic",
     "apiKeyEnv": "LITELLM_API_KEY"

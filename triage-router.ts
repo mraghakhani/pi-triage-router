@@ -135,6 +135,11 @@ export interface ClassifierConfig {
 	authFile: string | null;
 	/** Classification timeout in ms (local inference and each remote attempt). Default 5000. */
 	timeoutMs: number;
+	/** Total remote attempts: first try + retries, on 429/5xx/network errors only.
+	 * Local inference never retries. Default 1 (no retries). Bounds: 1..10. */
+	maxAttempts: number;
+	/** Delay between remote attempts in ms. Default 0. */
+	retryDelayMs: number;
 	/** Remote state budget in tokens (the JSON {role, prompt} payload). Default 512. */
 	maxInputTokens: number;
 	/** Role text for local Laya's state (measured room still applies). */
@@ -297,7 +302,7 @@ const KNOWN_CONFIG_KEYS = new Set([
 	"benchmarks",
 	"scoring",
 ]);
-const CLASSIFIER_KEYS = new Set(["provider", "model", "protocol", "authFile", "timeoutMs", "maxInputTokens", "localPrompt", "remotePrompt", "failurePolicy", "apiKeyEnv", "proxyUrl"]);
+const CLASSIFIER_KEYS = new Set(["provider", "model", "protocol", "authFile", "timeoutMs", "maxAttempts", "retryDelayMs", "maxInputTokens", "localPrompt", "remotePrompt", "failurePolicy", "apiKeyEnv", "proxyUrl"]);
 const BENCHMARK_KEYS = new Set(["enabled", "source", "cachePath", "refreshIntervalMs", "staleAfterMs", "timeoutMs", "apiKeyEnv", "proxyUrl"]);
 const SCORING_KEYS = new Set(["enabled", "missingPolicy", "missingPenalty", "stalePolicy", "expectedInputTokens", "expectedOutputTokens", "complexityQualityDelta", "classifierWeight", "weights"]);
 const CAPABILITY_KEYS = new Set(["coding", "reasoning", "agentic", "infra", "taskSuccess", "research"]);
@@ -378,6 +383,8 @@ function defaultClassifier(timeoutMs: number): ClassifierConfig {
 		provider: "local",
 		model: "typesafe/jev-1.13",
 		timeoutMs,
+		maxAttempts: 1,
+		retryDelayMs: 0,
 		maxInputTokens: 512,
 		localPrompt: ROLE_TEXT,
 		remotePrompt: DEFAULT_REMOTE_PROMPT,
@@ -507,6 +514,16 @@ export function validateConfig(raw: unknown): RouterConfig {
 		if (c.timeoutMs !== undefined) {
 			if (typeof c.timeoutMs === "number" && c.timeoutMs >= 100) target.timeoutMs = c.timeoutMs;
 			else problems.push(`"${label}.timeoutMs" must be a number >= 100`);
+		}
+		if (c.maxAttempts !== undefined) {
+			if (typeof c.maxAttempts === "number" && Number.isInteger(c.maxAttempts) && c.maxAttempts >= 1 && c.maxAttempts <= 10) {
+				target.maxAttempts = c.maxAttempts;
+			} else problems.push(`"${label}.maxAttempts" must be an integer in 1..10`);
+		}
+		if (c.retryDelayMs !== undefined) {
+			if (typeof c.retryDelayMs === "number" && c.retryDelayMs >= 0 && c.retryDelayMs <= 60_000) {
+				target.retryDelayMs = c.retryDelayMs;
+			} else problems.push(`"${label}.retryDelayMs" must be a number in 0..60000`);
 		}
 		if (c.maxInputTokens !== undefined) {
 			if (typeof c.maxInputTokens === "number" && c.maxInputTokens >= 64 && c.maxInputTokens <= 1_000_000) {
@@ -1050,6 +1067,8 @@ export async function getClassifier(
 				prompt: input.prompt,
 				questions,
 				timeoutMs: cfg.timeoutMs,
+				maxAttempts: cfg.maxAttempts,
+				retryDelayMs: cfg.retryDelayMs,
 				apiKey,
 				proxyUrl,
 				endpoint,
@@ -1608,9 +1627,14 @@ export async function classifyAndDecide(
 	if (handle.classifier) {
 		const started = Date.now();
 		try {
+			// Remote retries extend the wall-clock budget: per-attempt timeouts sum,
+			// plus the gaps between attempts. Local inference keeps a single budget.
+			const budget = handle.kind === "local"
+				? section.timeoutMs
+				: section.timeoutMs * section.maxAttempts + section.retryDelayMs * (section.maxAttempts - 1);
 			const result = await withTimeout(
 				handle.classifier.systemOne({ role: roleText, prompt: input.prompt }, questions),
-				section.timeoutMs,
+				budget,
 			);
 			clfMs = Date.now() - started;
 			probabilities = {

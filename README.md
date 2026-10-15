@@ -215,6 +215,8 @@ per (re)load and skipped; the router keeps working with the valid entries.
   "classifier": {            // backend for the laya/auto entry (default: local Laya)
     "provider": "local",     // "local" | "openrouter" | "litellm" (remote backends)
     "timeoutMs": 5000,       // local inference / each remote attempt
+    "maxAttempts": 1,        // remote attempts total (first try + retries); 1..10
+    "retryDelayMs": 0,       // gap between remote attempts (ms)
     "maxInputTokens": 512,   // remote state budget (tokens, conservative 3 chars/token)
     "localPrompt": "...",    // role text for local Laya (default: ROLE_TEXT)
     "remotePrompt": "...",   // role text for the remote classifier (longer allowed)
@@ -228,6 +230,8 @@ per (re)load and skipped; the router keeps working with the valid entries.
     "model": "typesafe/jev-1.13",
     "protocol": "systemone", // "systemone" (LiteLLM) | "decisions" (OpenRouter)
     "timeoutMs": 5000,
+    "maxAttempts": 1,        // remote attempts total; retries only on 429/5xx/network
+    "retryDelayMs": 0,
     "maxInputTokens": 28672, // Jev state room: 32k (state+question) limit, 28k leaves 4k for questions
     "failurePolicy": "deterministic",
     "apiKeyEnv": "LITELLM_API_KEY" // env first, then auth.json["litellm"].key; base URL from auth.json["litellm"]
@@ -340,8 +344,10 @@ Rules that hold for every remote backend:
 - **Structured output is validated regardless of provider**: probabilities
   must be finite numbers in [0,1] or they are dropped; a structurally
   invalid payload is a classification failure, never a decision.
-- **Bounded retries and timeouts**: at most one retry, only on 429/5xx /
-  network errors, each attempt inside `timeoutMs`.
+- **Bounded retries and timeouts**: `maxAttempts` remote attempts total
+  (default 1 = no retries; configurable 1..10), only on 429/5xx /
+  network errors, `retryDelayMs` between attempts (default 0), each attempt
+  inside `timeoutMs`. The wall-clock budget scales with the attempt count.
 - **No silent provider switching.** A failing backend follows
   `failurePolicy`: `"deterministic"` (default) = the documented deterministic
   fallback policy picks the execution model with no classification signal;
