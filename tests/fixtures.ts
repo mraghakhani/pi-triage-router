@@ -122,6 +122,8 @@ export function testConfig(overrides: Record<string, unknown> = {}): router.Rout
 			{ provider: "litellm", id: "xiaomi/mimo-v2.5", description: "Long-horizon cheap", priceIn: 0.14 },
 		],
 		fallback: "cheapest",
+		// Hermetic tests: the default-enabled price refresh must never run here.
+		prices: { enabled: false },
 		...overrides,
 	});
 }

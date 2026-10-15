@@ -58,6 +58,7 @@ rows below are for the **npm** install:
 | Config | `~/.pi/agent/triage-router.json` | **yes - the only file you edit** |
 | Bundled defaults | `~/.pi/agent/npm/node_modules/pi-triage-router/triage-router.json` | no - `pi update` replaces it |
 | Benchmark cache | `~/.pi/agent/triage-router.benchmarks.json` | no - regenerated automatically |
+| Price cache | `~/.pi/agent/triage-router.prices.json` | no - regenerated automatically |
 | Laya weights (~2 GB) | `~/.cache/receptron-laya` | no - downloaded on first use |
 
 Resolution order is `TRIAGE_ROUTER_CONFIG` > `~/.pi/agent/triage-router.json` >
@@ -190,6 +191,18 @@ just means the deterministic policy decides.
 Hot-reloaded (re-read when the file mtime changes; no Pi restart needed).
 Prices are **USD per 1M tokens**; `priceIn: 0` is a legitimate free model,
 an absent price means unknown. Unknown keys and bad values are reported once
+
+**Auto-updated prices** (`prices` section, default on): the public OpenRouter
+catalog (`/api/v1/models`, keyless) refreshes in the background at most once
+every 24h into `~/.pi/agent/triage-router.prices.json` - same pattern as the
+benchmark cache: routing only reads the local file, a refresh never blocks a
+route, and failures keep the last known good cache. A bundled snapshot
+(`triage-router.prices.json`, fetched at release time) serves reads until the
+first background refresh writes the agent-dir cache, so a fresh install has
+prices without any network wait. Lookup precedence:
+live registry cost -> cached catalog price -> config `priceIn`/`priceOut`.
+Models absent from the catalog (renamed/withdrawn upstream) fall back to the
+config prices. Set `"prices": { "enabled": false }` to pin config prices only.
 per (re)load and skipped; the router keeps working with the valid entries.
 
 ```jsonc
@@ -242,6 +255,11 @@ per (re)load and skipped; the router keeps working with the valid entries.
     "source": "openrouter",  // unified endpoint (key) | "openrouter-models" (public, keyless)
     "refreshIntervalMs": 86400000,  // background refresh at most once a day
     "staleAfterMs": 2592000000      // 30 days: stale rows per scoring.stalePolicy
+  },
+
+  "prices": {               // OpenRouter price cache (public catalog, keyless)
+    "enabled": true,
+    "refreshIntervalMs": 86400000   // background refresh at most once a day
   },
 
   "scoring": {               // benchmark-and-price selection (default: off)

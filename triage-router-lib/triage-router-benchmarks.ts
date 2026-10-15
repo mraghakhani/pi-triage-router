@@ -577,7 +577,9 @@ export interface RefreshResult {
 
 const BENCH_BASE = "https://openrouter.ai";
 
-async function httpGetJson(
+/** Fetch JSON with timeout, optional key, and bounded retries on 429/5xx/network
+ * (mirrors the classifier transport rules). Exported for the price cache. */
+export async function httpGetJson(
 	url: string,
 	opts: { timeoutMs: number; proxyUrl: string | null; apiKey?: string; fetchImpl?: FetchLike; maxAttempts?: number },
 ): Promise<unknown> {

@@ -4,8 +4,8 @@
       "provider": "litellm",
       "id": "deepseek/deepseek-v4-flash",
       "description": "Simple questions, explanations, small fixes, and routine code edits.",
-      "priceIn": 0.01,
-      "priceOut": 1.28
+      "priceIn": 0.091,
+      "priceOut": 0.182
     },
     {
       "provider": "litellm",
@@ -18,22 +18,22 @@
       "provider": "litellm",
       "id": "z-ai/glm-5.3",
       "description": "Multi-file changes, larger refactors, and performance-sensitive engineering.",
-      "priceIn": 0.04,
+      "priceIn": 0.1,
       "priceOut": 4.8
     },
     {
       "provider": "litellm",
       "id": "deepseek/deepseek-v4-pro",
       "description": "Balanced agentic workloads; strong tau2 score at mid price.",
-      "priceIn": 0.3,
-      "priceOut": 0.59
+      "priceIn": 0.365,
+      "priceOut": 0.73
     },
     {
       "provider": "litellm",
       "id": "deepseek/deepseek-v4.1-flash",
       "description": "Agentic tool use when v4-flash underperforms; newer flash generation.",
-      "priceIn": 0.3,
-      "priceOut": 1.2
+      "priceIn": 0.15,
+      "priceOut": 0.6
     },
     {
       "provider": "litellm",
@@ -53,7 +53,7 @@
       "provider": "litellm",
       "id": "xiaomi/mimo-v2.6-pro",
       "description": "Very long horizon tasks needing durable multi-step performance.",
-      "priceIn": 0.44,
+      "priceIn": 0.435,
       "priceOut": 0.87
     },
     {
@@ -67,7 +67,7 @@
       "provider": "litellm",
       "id": "moonshotai/kimi-k3",
       "description": "Top-tier coding quality when output cost matters less; expensive output.",
-      "priceIn": 0.5,
+      "priceIn": 0.29,
       "priceOut": 12.0
     },
     {
@@ -105,6 +105,10 @@
     "source": "openrouter",
     "refreshIntervalMs": 86400000,
     "staleAfterMs": 2592000000
+  },
+  "prices": {
+    "enabled": true,
+    "refreshIntervalMs": 86400000
   },
   "scoring": {
     "enabled": true,

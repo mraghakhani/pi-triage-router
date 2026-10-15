@@ -41,6 +41,7 @@ import {
 	type CategoryWeights,
 	type ScoringConfig,
 } from "./triage-router-lib/triage-router-benchmarks.ts";
+import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
 import {
 	callDecisions,
 	classifierEndpoint,
@@ -199,6 +200,8 @@ export interface RouterConfig {
 	jev: ClassifierConfig | null;
 	/** Benchmark data source + cache settings. */
 	benchmarks: BenchmarkConfig;
+	/** Auto-refreshed OpenRouter price cache (24h background refresh, keyless). */
+	prices: PriceConfig;
 	/** Deterministic benchmark-driven scoring policy (disabled by default). */
 	scoring: ScoringConfig;
 	/** Problems found while loading the config (non-fatal; logged once per (re)load). */
@@ -300,10 +303,12 @@ const KNOWN_CONFIG_KEYS = new Set([
 	"classifier",
 	"jev",
 	"benchmarks",
+	"prices",
 	"scoring",
 ]);
 const CLASSIFIER_KEYS = new Set(["provider", "model", "protocol", "authFile", "timeoutMs", "maxAttempts", "retryDelayMs", "maxInputTokens", "localPrompt", "remotePrompt", "failurePolicy", "apiKeyEnv", "proxyUrl"]);
 const BENCHMARK_KEYS = new Set(["enabled", "source", "cachePath", "refreshIntervalMs", "staleAfterMs", "timeoutMs", "apiKeyEnv", "proxyUrl"]);
+const PRICE_KEYS = new Set(["enabled", "cachePath", "refreshIntervalMs", "timeoutMs", "proxyUrl"]);
 const SCORING_KEYS = new Set(["enabled", "missingPolicy", "missingPenalty", "stalePolicy", "expectedInputTokens", "expectedOutputTokens", "complexityQualityDelta", "classifierWeight", "weights"]);
 const CAPABILITY_KEYS = new Set(["coding", "reasoning", "agentic", "infra", "taskSuccess", "research"]);
 
@@ -411,6 +416,18 @@ function defaultBenchmarks(): BenchmarkConfig {
 	};
 }
 
+/** Price cache defaults (shared by the initial literal and the mid-validation rebuild). */
+function defaultPrices(): PriceConfig {
+	return {
+		enabled: true,
+		cachePath: join(piAgentDir(), "triage-router.prices.json"),
+		seedPath: join(HERE, "triage-router.prices.json"),
+		refreshIntervalMs: 86_400_000,
+		timeoutMs: 15_000,
+		proxyUrl: null,
+	};
+}
+
 /** Scoring defaults, disabled (shared by the initial literal and the mid-validation rebuild). */
 function defaultScoring(): ScoringConfig {
 	return {
@@ -439,6 +456,7 @@ export function validateConfig(raw: unknown): RouterConfig {
 		classifier: defaultClassifier(5000),
 		jev: null,
 		benchmarks: defaultBenchmarks(),
+		prices: defaultPrices(),
 		scoring: defaultScoring(),
 		problems,
 	};
@@ -623,6 +641,40 @@ export function validateConfig(raw: unknown): RouterConfig {
 				if (b.proxyUrl === null || (typeof b.proxyUrl === "string" && b.proxyUrl.trim() !== "")) {
 					config.benchmarks.proxyUrl = b.proxyUrl as string | null;
 				} else problems.push('"benchmarks.proxyUrl" must be a string or null');
+			}
+		}
+	}
+
+	// --- price cache section ---
+	config.prices = defaultPrices();
+	if (obj.prices !== undefined) {
+		if (typeof obj.prices !== "object" || obj.prices === null || Array.isArray(obj.prices)) {
+			problems.push('"prices" must be an object; using defaults');
+		} else {
+			const p = obj.prices as Record<string, unknown>;
+			for (const key of Object.keys(p)) {
+				if (!PRICE_KEYS.has(key)) problems.push(`"prices": unknown key "${key}" ignored`);
+			}
+			if (p.enabled !== undefined) {
+				if (typeof p.enabled === "boolean") config.prices.enabled = p.enabled;
+				else problems.push('"prices.enabled" must be boolean');
+			}
+			if (p.cachePath !== undefined) {
+				if (typeof p.cachePath === "string" && p.cachePath.trim() !== "") config.prices.cachePath = p.cachePath;
+				else problems.push('"prices.cachePath" must be a non-empty string');
+			}
+			if (p.refreshIntervalMs !== undefined) {
+				if (typeof p.refreshIntervalMs === "number" && p.refreshIntervalMs >= 60_000) config.prices.refreshIntervalMs = p.refreshIntervalMs;
+				else problems.push('"prices.refreshIntervalMs" must be a number >= 60000');
+			}
+			if (p.timeoutMs !== undefined) {
+				if (typeof p.timeoutMs === "number" && p.timeoutMs >= 1000) config.prices.timeoutMs = p.timeoutMs;
+				else problems.push('"prices.timeoutMs" must be a number >= 1000');
+			}
+			if (p.proxyUrl !== undefined) {
+				if (p.proxyUrl === null || (typeof p.proxyUrl === "string" && p.proxyUrl.trim() !== "")) {
+					config.prices.proxyUrl = p.proxyUrl as string | null;
+				} else problems.push('"prices.proxyUrl" must be a string or null');
 			}
 		}
 	}
@@ -1140,30 +1192,49 @@ function composite(entry: ModelEntry): string {
 	return `${entry.provider}/${entry.id}`;
 }
 
+/** Effective input price (USD/1M tokens) for routing rules: live registry
+ * cost, then the auto-refreshed price cache, then the config `priceIn`. */
+export type PriceResolver = (entry: ModelEntry) => number | undefined;
+
+function priceResolver(ctx: ExtensionContext, config: RouterConfig): PriceResolver {
+	const dataset = config.prices.enabled ? readPriceDataset(config.prices.cachePath, config.prices.seedPath) : null;
+	return (entry) =>
+		ctx.modelRegistry.find(entry.provider, entry.id)?.cost?.input ??
+		dataset?.prices[entry.id]?.input ??
+		entry.priceIn;
+}
+
+/** Cached catalog price for a model id (null-cache-aware). */
+function cachedPriceFor(config: RouterConfig, id: string): ModelPrice | undefined {
+	return config.prices.enabled ? readPriceDataset(config.prices.cachePath, config.prices.seedPath)?.prices[id] : undefined;
+}
+
 /** Cheapest eligible entry: lowest input price when all entries carry prices, else file order first. */
-export function cheapestEligible(eligible: ModelEntry[]): ModelEntry {
-	if (eligible.every((e) => e.priceIn !== undefined)) {
-		return eligible.reduce((a, b) => ((a.priceIn ?? 0) <= (b.priceIn ?? 0) ? a : b));
+export function cheapestEligible(eligible: ModelEntry[], priceIn?: PriceResolver): ModelEntry {
+	const price = (e: ModelEntry) => priceIn?.(e) ?? e.priceIn;
+	if (eligible.every((e) => price(e) !== undefined)) {
+		return eligible.reduce((a, b) => ((price(a) ?? 0) <= (price(b) ?? 0) ? a : b));
 	}
 	return eligible[0];
 }
 
 /** Strongest eligible entry: highest input price when all entries carry prices, else file order last. */
-export function strongestEligible(eligible: ModelEntry[]): ModelEntry {
-	if (eligible.every((e) => e.priceIn !== undefined)) {
-		return eligible.reduce((a, b) => ((a.priceIn ?? 0) >= (b.priceIn ?? 0) ? a : b));
+export function strongestEligible(eligible: ModelEntry[], priceIn?: PriceResolver): ModelEntry {
+	const price = (e: ModelEntry) => priceIn?.(e) ?? e.priceIn;
+	if (eligible.every((e) => price(e) !== undefined)) {
+		return eligible.reduce((a, b) => ((price(a) ?? 0) >= (price(b) ?? 0) ? a : b));
 	}
 	return eligible[eligible.length - 1];
 }
 
-function fallbackEntry(config: RouterConfig, eligible: ModelEntry[]): ModelEntry {
+function fallbackEntry(config: RouterConfig, eligible: ModelEntry[], priceIn?: PriceResolver): ModelEntry {
 	if (eligible.length === 0) throw new Error(`${LOG_PREFIX} no eligible models: config entries missing from the model registry`);
 	if (config.defaultModel) {
 		const match = eligible.find((entry) => composite(entry) === config.defaultModel);
 		if (match) return match;
 		console.error(`${LOG_PREFIX} configured "default" ${config.defaultModel} is not eligible; using ${config.fallback}`);
 	}
-	return config.fallback === "strongest" ? strongestEligible(eligible) : cheapestEligible(eligible);
+	return config.fallback === "strongest" ? strongestEligible(eligible, priceIn) : cheapestEligible(eligible, priceIn);
 }
 
 function argmaxModel(probabilities: Record<string, number>, eligible: ModelEntry[]): ModelEntry | null {
@@ -1213,6 +1284,7 @@ export function decide(
 	config: RouterConfig,
 	eligible: ModelEntry[],
 	scoreContext?: ScoreContext,
+	priceIn?: PriceResolver,
 ): RoutingDecision {
 	const notes: string[] = [];
 	const complexity = argmaxKey(probabilities.complexity, COMPLEXITIES) ?? "standard";
@@ -1250,7 +1322,7 @@ export function decide(
 
 	if (!picked) {
 		notes.push("Laya selection rejected: outside eligible set");
-		const entry = fallbackEntry(config, eligible);
+		const entry = fallbackEntry(config, eligible, priceIn);
 		return {
 			entry,
 			rule: "fallback",
@@ -1266,19 +1338,19 @@ export function decide(
 	if (
 		complexity === "complex" &&
 		ESCALATE_CATEGORIES.has(category) &&
-		entry === cheapestEligible(eligible) &&
+		entry === cheapestEligible(eligible, priceIn) &&
 		eligible.length > 1
 	) {
 		// Quality rule, independent of the failure fallback policy: complex
 		// demanding work escalates to the strongest eligible model.
-		const strongest = strongestEligible(eligible);
+		const strongest = strongestEligible(eligible, priceIn);
 		if (strongest && strongest !== picked) {
 			entry = strongest;
 			rule = "escalated";
 			notes.push(`complex ${category} work escalated off cheapest tier`);
 		}
-	} else if (category === "budget" && entry !== cheapestEligible(eligible)) {
-		const cheapest = cheapestEligible(eligible);
+	} else if (category === "budget" && entry !== cheapestEligible(eligible, priceIn)) {
+		const cheapest = cheapestEligible(eligible, priceIn);
 		if (cheapest && cheapest !== entry) {
 			entry = cheapest;
 			rule = "downgraded";
@@ -1382,9 +1454,11 @@ export function estimateCost(
 	promptChars: number,
 	contextTokens: number | null,
 	lastUsage: SessionPeek["lastUsage"],
+	/** Auto-refreshed catalog price; registry cost still wins. */
+	cachedPrice?: ModelPrice | null,
 ): CostEstimate {
-	const priceIn = registryModel?.cost?.input ?? entry.priceIn ?? null;
-	const priceOut = registryModel?.cost?.output ?? entry.priceOut ?? null;
+	const priceIn = registryModel?.cost?.input ?? cachedPrice?.input ?? entry.priceIn ?? null;
+	const priceOut = registryModel?.cost?.output ?? cachedPrice?.output ?? entry.priceOut ?? null;
 	const usageMatches =
 		lastUsage != null && lastUsage.model === entry.id && lastUsage.provider === entry.provider;
 	let inputTokens: number | null = null;
@@ -1684,8 +1758,9 @@ export async function classifyAndDecide(
 				dataset: readDataset(config.benchmarks.cachePath, config.benchmarks.seedPath),
 				estimatedCost: (entry: ModelEntry) => {
 					const reg = ctx.modelRegistry.find(entry.provider, entry.id);
-					const pIn = reg?.cost?.input ?? entry.priceIn;
-					const pOut = reg?.cost?.output ?? entry.priceOut;
+					const cached = cachedPriceFor(config, entry.id);
+					const pIn = reg?.cost?.input ?? cached?.input ?? entry.priceIn;
+					const pOut = reg?.cost?.output ?? cached?.output ?? entry.priceOut;
 					if (typeof pIn !== "number" || typeof pOut !== "number") return null;
 					return (
 						(config.scoring.expectedInputTokens / 1e6) * pIn +
@@ -1695,7 +1770,8 @@ export async function classifyAndDecide(
 				capabilities: (entry: ModelEntry) => entry.capabilities,
 			}
 		: undefined;
-	const decision = decide(probabilities, config, eligible, scoreContext);
+	const priceIn = priceResolver(ctx, config);
+	const decision = decide(probabilities, config, eligible, scoreContext, priceIn);
 	const registryModel = ctx.modelRegistry.find(decision.entry.provider, decision.entry.id);
 	const contextTokens = safeContextTokens(ctx);
 	decision.estimate = estimateCost(
@@ -1704,6 +1780,7 @@ export async function classifyAndDecide(
 		input.prompt.length,
 		contextTokens,
 		session.lastUsage,
+		cachedPriceFor(config, decision.entry.id) ?? null,
 	);
 	return { decision, layaMs: clfMs, input, summary, lastCost: session.lastUsage?.cost ?? null, clf };
 }
@@ -1804,7 +1881,7 @@ export async function handleRequest(
 
 	// Direct requests (compaction summaries, extension calls): cheapest eligible.
 	if (request.reason === "direct") {
-		const entry = fallbackEntry(config, eligible);
+		const entry = fallbackEntry(config, eligible, priceResolver(ctx, config));
 		logDecision(
 			{
 				entry,
@@ -1850,6 +1927,8 @@ export async function handleRequest(
 
 	// New user request (or lost state): classify with context.
 	const benchmarkIds = config.models.filter((m) => m.enabled !== false).map((m) => m.id);
+	// Keyless public catalog: price refresh independent of scoring/benchmarks.
+	if (config.prices.enabled) schedulePriceRefresh(config.prices, benchmarkIds);
 	if (config.benchmarks.enabled && config.scoring.enabled) {
 		// Non-blocking: refresh runs in the background, routing reads the cache.
 		scheduleRefresh(config.benchmarks, benchmarkIds);
