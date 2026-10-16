@@ -1,0 +1,227 @@
+/**
+ * Session routing history + dashboard report for the triage-router extension.
+ *
+ * Rules honored here:
+ *  - In-memory only: history and totals are per-session, never persisted; the
+ *    dashboard is a live view, not an audit log.
+ *  - Bounded: at most HISTORY_CAP records are kept (oldest dropped).
+ *  - Costs are ESTIMATES from the routing decision (estCostIn/estCostOut),
+ *    never invented; unknown stays null and renders as "-".
+ *  - No network: the report reads only config, the local price cache/seed,
+ *    and the local benchmark cache/seed.
+ *
+ * This module type-imports shared types from triage-router.ts but imports no
+ * runtime values from it (the router imports values from here).
+ */
+import type { Category, Complexity, ModelEntry, RouterConfig } from "../triage-router.ts";
+import { datasetStatus, readDataset, type MetricKey } from "./triage-router-benchmarks.ts";
+import { readPriceDataset } from "./triage-router-prices.ts";
+
+// ---------------------------------------------------------------------------
+// Routing history
+// ---------------------------------------------------------------------------
+
+/** One routing decision as recorded for the dashboard (per-session). */
+export interface RoutingRecord {
+	/** ms epoch of the decision. */
+	timestamp: number;
+	/** Chosen model as "provider/id". */
+	model: string;
+	/** Which deterministic rule produced the selection. */
+	rule: string;
+	complexity: Complexity;
+	category: Category;
+	/** Estimated request cost estCostIn + estCostOut in USD, or null. */
+	cost: number | null;
+}
+
+/** Ring-buffer cap for in-memory session history. */
+export const HISTORY_CAP = 50;
+
+let history: RoutingRecord[] = [];
+
+/** Estimated request cost estCostIn + estCostOut in USD, or null when unknown. */
+export function recordCost(
+	estCostIn: number | null | undefined,
+	estCostOut: number | null | undefined,
+): number | null {
+	const inUsd = typeof estCostIn === "number" ? estCostIn : null;
+	const outUsd = typeof estCostOut === "number" ? estCostOut : null;
+	if (inUsd === null && outUsd === null) return null;
+	return (inUsd ?? 0) + (outUsd ?? 0);
+}
+
+/** Append a record (oldest dropped past HISTORY_CAP); returns a copy. */
+export function recordRoute(
+	record: Omit<RoutingRecord, "timestamp"> & Partial<Pick<RoutingRecord, "timestamp">>,
+): RoutingRecord {
+	const entry: RoutingRecord = { ...record, timestamp: record.timestamp ?? Date.now() };
+	history.push(entry);
+	if (history.length > HISTORY_CAP) {
+		history = history.slice(history.length - HISTORY_CAP);
+	}
+	return { ...entry };
+}
+
+/** Current session history, oldest first (copy). */
+export function routeHistory(): RoutingRecord[] {
+	return [...history];
+}
+
+/** Session cost totals from the recorded history. */
+export function sessionCost(): { total: number | null; byModel: Record<string, number> } {
+	const byModel: Record<string, number> = {};
+	let total: number | null = null;
+	for (const r of history) {
+		if (r.cost == null) continue;
+		total = (total ?? 0) + r.cost;
+		byModel[r.model] = (byModel[r.model] ?? 0) + r.cost;
+	}
+	return { total, byModel };
+}
+
+export function resetDashboardForTests(): void {
+	history = [];
+}
+
+// ---------------------------------------------------------------------------
+// Report formatting
+// ---------------------------------------------------------------------------
+
+function usd(value: number | null | undefined): string {
+	return typeof value === "number" ? `$${value.toFixed(4)}` : "-";
+}
+
+function composite(entry: Pick<ModelEntry, "provider" | "id">): string {
+	return `${entry.provider}/${entry.id}`;
+}
+
+function timeLabel(timestamp: number): string {
+	return new Date(timestamp).toLocaleTimeString();
+}
+
+/** Price used by the report: cached catalog price wins over config price. */
+function reportPrice(
+	config: RouterConfig,
+	entry: ModelEntry,
+): { input: number | null; output: number | null; source: "cache" | "config" } {
+	if (config.prices.enabled) {
+		const dataset = readPriceDataset(config.prices.cachePath, config.prices.seedPath);
+		const cached = dataset?.prices[entry.id];
+		if (cached) return { input: cached.input, output: cached.output, source: "cache" };
+	}
+	return { input: entry.priceIn ?? null, output: entry.priceOut ?? null, source: "config" };
+}
+
+/** One quality metric from the benchmark cache for the lineup table. */
+function benchmarkQuality(config: RouterConfig, id: string): string | null {
+	if (!config.benchmarks.enabled) return null;
+	const dataset = readDataset(config.benchmarks.cachePath, config.benchmarks.seedPath);
+	const metrics = dataset?.models[id];
+	if (!metrics) return null;
+	const key: MetricKey = "coding";
+	const value = metrics[key];
+	return typeof value === "number" ? value.toFixed(0) : null;
+}
+
+function lineupSection(config: RouterConfig): string {
+	const lines = ["## Model lineup", "", "| model | $/M in | $/M out | coding | status |", "|---|---|---|---|---|"];
+	for (const entry of config.models) {
+		const price = reportPrice(config, entry);
+		const quality = benchmarkQuality(config, entry.id);
+		const status =
+			entry.enabled === false ? "disabled" : price.source === "cache" ? "active (catalog price)" : "active";
+		lines.push(
+			`| ${composite(entry)} | ${usd(price.input)} | ${usd(price.output)} | ${quality ?? "-"} | ${status} |`,
+		);
+	}
+	lines.push("");
+	return lines.join("\n");
+}
+
+function costSection(): string {
+	const { total, byModel } = sessionCost();
+	const lines = ["## Session cost (estimated)", ""];
+	lines.push(`Total this session: **${usd(total)}** across ${history.length} routed request(s).`);
+	const models = Object.entries(byModel).sort((a, b) => b[1] - a[1]);
+	if (models.length > 0) {
+		lines.push("");
+		lines.push("| model | estimated spend |", "|---|---|");
+		for (const [model, cost] of models) lines.push(`| ${model} | ${usd(cost)} |`);
+	}
+	lines.push("");
+	return lines.join("\n");
+}
+
+function historySection(): string {
+	const lines = ["## Route history (newest first, session only)", ""];
+	if (history.length === 0) {
+		lines.push("_No requests routed yet this session._");
+		lines.push("");
+		return lines.join("\n");
+	}
+	lines.push("| time | model | rule | complexity | category | est cost |", "|---|---|---|---|---|---|");
+	for (const r of [...history].reverse()) {
+		lines.push(
+			`| ${timeLabel(r.timestamp)} | ${r.model} | ${r.rule} | ${r.complexity} | ${r.category} | ${usd(r.cost)} |`,
+		);
+	}
+	lines.push("");
+	return lines.join("\n");
+}
+
+function cacheSection(config: RouterConfig): string {
+	const lines = ["## Cache status", ""];
+	const ids = config.models.filter((m) => m.enabled !== false).map((m) => m.id);
+	if (config.benchmarks.enabled) {
+		lines.push(`- Benchmarks: ${datasetStatus(config.benchmarks, ids)}`);
+	} else {
+		lines.push("- Benchmarks: disabled");
+	}
+	if (config.prices.enabled) {
+		const dataset = readPriceDataset(config.prices.cachePath, config.prices.seedPath);
+		lines.push(
+			dataset
+				? `- Prices: ${Object.keys(dataset.prices).length} model(s), fetched ${dataset.fetchedAt.slice(0, 10)}`
+				: "- Prices: no dataset (cache/seed absent)",
+		);
+	} else {
+		lines.push("- Prices: disabled (config prices only)");
+	}
+	lines.push("");
+	return lines.join("\n");
+}
+
+function configSection(config: RouterConfig): string {
+	const lines = ["## Config", ""];
+	const classifier = config.classifier;
+	lines.push(
+		`- Classifier: ${classifier.provider}${classifier.provider === "local" ? "" : ` (${classifier.provider}/${classifier.model})`}`,
+	);
+	const jev = config.jev;
+	lines.push(
+		jev
+			? `- Jev backend: ${jev.provider}${jev.provider === "local" ? "" : ` (${jev.provider}/${jev.model})`}`
+			: "- Jev backend: not configured",
+	);
+	lines.push(`- Fallback: ${config.fallback}`);
+	lines.push(`- Override: ${config.override ?? "none"}`);
+	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
+	lines.push("");
+	return lines.join("\n");
+}
+
+/** Full dashboard report (Markdown) for the /triage command. */
+export function formatDashboard(config: RouterConfig): string {
+	return [
+		"# pi-triage-router dashboard",
+		"",
+		lineupSection(config),
+		costSection(),
+		historySection(),
+		cacheSection(config),
+		configSection(config),
+	]
+		.join("\n")
+		.replace(/\n{3,}/g, "\n\n");
+}

@@ -559,6 +559,29 @@ cost of D but 0.39x the cost of E.
 - No prompts, summaries, or conversation content are logged - only ids,
   sizes, latencies, and rule names. No secrets are read.
 
+### `/triage` dashboard
+
+The extension registers a `/triage` slash command that prints a session
+dashboard into the transcript:
+
+- **Model lineup** - every configured entry with its USD/1M-token prices
+  (auto-refreshed catalog price wins over the config `priceIn`/`priceOut`),
+  the cached `coding` benchmark index, and its status (active/disabled).
+- **Session cost** - the running **estimated** total across the routes
+  recorded this session, plus a per-model breakdown. Estimates come from the
+  routing decision's `estCostIn`/`estCostOut` (see above); they are never
+  invented.
+- **Route history** - the last 50 routes of this session (newest first):
+  time, model, rule, complexity, category, and estimated cost.
+- **Cache status** - benchmark and price cache freshness/coverage.
+- **Config** - classifier backend, jev backend, fallback policy, override,
+  and scoring state.
+
+History and totals are in-memory and per-session: nothing is written to
+disk, and no conversation content is recorded - only ids, rules, and costs.
+The command exists on any pi build with `registerCommand`; older builds skip
+registration and keep routing unchanged.
+
 ## Tests
 
 The test suite lives in the [git repository](https://github.com/mraghakhani/pi-triage-router)

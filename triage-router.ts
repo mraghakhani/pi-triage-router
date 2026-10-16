@@ -42,6 +42,7 @@ import {
 	type ScoringConfig,
 } from "./triage-router-lib/triage-router-benchmarks.ts";
 import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
+import { formatDashboard, recordCost, recordRoute } from "./triage-router-lib/triage-router-dashboard.ts";
 import {
 	callDecisions,
 	classifierEndpoint,
@@ -1526,6 +1527,14 @@ function logDecision(
 		`${decision.entry.id} · ${decision.rule}` +
 			(est?.estCostIn != null ? ` · ~$${Number(est.estCostIn).toFixed(4)}/req` : ""),
 	);
+	// Session history for the /triage dashboard (in-memory, bounded).
+	recordRoute({
+		model: composite(decision.entry),
+		rule: decision.rule,
+		complexity: decision.complexity,
+		category: decision.category,
+		cost: recordCost(est?.estCostIn, est?.estCostOut),
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -1832,6 +1841,22 @@ export default function (pi: ExtensionAPI) {
 			...meta,
 			async route(request, ctx) {
 				return handleRequest(request, ctx, loadConfig(), "jev");
+			},
+		});
+	}
+	// /triage dashboard: session lineup, prices, estimated cost, routing history.
+	// Guarded so older pi builds without registerCommand still load the router.
+	if (typeof pi.registerCommand === "function") {
+		pi.registerCommand("triage", {
+			description:
+				"Show the pi-triage-router dashboard: model lineup, prices, session cost, routing history",
+			handler: async () => {
+				pi.sendMessage({
+					customType: "triage-dashboard",
+					content: formatDashboard(loadConfig()),
+					display: true,
+					details: undefined,
+				});
 			},
 		});
 	}
