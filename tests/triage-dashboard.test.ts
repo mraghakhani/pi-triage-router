@@ -1,7 +1,7 @@
 /** Tests for the /triage dashboard: session routing history, cost totals, report format. */
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as router from "../triage-router.ts";
@@ -219,6 +219,23 @@ test("menu patches never materialize the runtime seedPath in the config file", (
 	assert.ok(!("seedPath" in raw.prices), "prices.seedPath stripped");
 	assert.ok(!("seedPath" in raw.benchmarks), "benchmarks.seedPath stripped");
 	assert.equal(raw.prices.enabled, false, "the actual edit survives");
+});
+
+test("rapid successive saves never serve a stale cached config", () => {
+	const path = join(configDir, "triage-router.json");
+	router.updateConfigFile(path, { override: "litellm/a/b" });
+	// Pin the mtime to an exact value (utimes takes seconds; 1e9 s is exact in
+	// float64) so the cached mtimeMs can be restored bit-for-bit after the
+	// second write - simulating a filesystem where both writes alias.
+	utimesSync(path, new Date(0), new Date(1_000_000_000_000));
+	assert.equal(router.loadConfig(path).fallback, "cheapest");
+	router.updateConfigFile(path, { fallback: "strongest" });
+	utimesSync(path, new Date(0), new Date(1_000_000_000_000));
+	assert.equal(
+		router.loadConfig(path).fallback,
+		"strongest",
+		"updateConfigFile invalidates the cache; loadConfig never serves the pre-write config",
+	);
 });
 
 test("loadConfig picks up menu edits without a restart", () => {

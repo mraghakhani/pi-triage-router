@@ -881,6 +881,10 @@ export function updateConfigFile(path: string, patch: Record<string, unknown>): 
 	const tmp = `${path}.tmp`;
 	writeFileSync(tmp, `${JSON.stringify(raw, null, "\t")}\n`);
 	renameSync(tmp, path);
+	// Invalidate the loadConfig cache outright: mtimeMs granularity varies by
+	// filesystem, so two rapid saves could otherwise alias to the same key and
+	// serve a stale config.
+	cachedConfig = null;
 	for (const problem of config.problems) console.error(`${LOG_PREFIX} config: ${problem}`);
 	return config;
 }
@@ -1900,7 +1904,13 @@ type GetConfig = () => RouterConfig;
 
 function makeSave(ctx: ExtensionContext, setConfig: (c: RouterConfig) => void): MenuSave {
 	return async (patch, note) => {
-		const config = updateConfigFile(CONFIG_PATH, patch);
+		let config: RouterConfig;
+		try {
+			config = updateConfigFile(CONFIG_PATH, patch);
+		} catch (err) {
+			ctx.ui.notify(`Save failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+			return;
+		}
 		setConfig(config);
 		ctx.ui.notify(note, "info");
 	};
@@ -1957,7 +1967,20 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 		if (pick.startsWith("Provider")) {
 			const provider = await ctx.ui.select("Classifier provider", ["local", "openrouter", "litellm"]);
 			if (!provider) continue;
-			await save({ classifier: { ...clf, provider } }, `classifier.provider = ${provider} saved`);
+			if (provider === "local" || clf.provider !== "local") {
+				await save({ classifier: { provider } }, `classifier.provider = ${provider} saved`);
+				continue;
+			}
+			// Switching local -> remote: confirm the remote model id in the same
+			// save so the backend never runs with a local-only model id.
+			const model = await ctx.ui.input(`Classifier model id for ${provider}`, clf.model);
+			const trimmed = model?.trim();
+			if (trimmed) {
+				await save({ classifier: { provider, model: trimmed } }, `classifier = ${provider}/${trimmed} saved`);
+			} else {
+				await save({ classifier: { provider } }, `classifier.provider = ${provider} saved`);
+				ctx.ui.notify("Set the remote model id next - remote calls need it.", "warning");
+			}
 		} else if (pick.startsWith("Model id")) {
 			if (clf.provider === "local") {
 				ctx.ui.notify("Model id is remote-only; set the provider first.", "warning");
@@ -1966,7 +1989,7 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 			const model = await ctx.ui.input("Classifier model id (e.g. typesafe/jev-1.13)", clf.model);
 			const trimmed = model?.trim();
 			if (!trimmed) continue;
-			await save({ classifier: { ...clf, model: trimmed } }, `classifier.model = ${trimmed} saved`);
+			await save({ classifier: { model: trimmed } }, `classifier.model = ${trimmed} saved`);
 		} else if (pick.startsWith("Timeout ms")) {
 			const value = await ctx.ui.input(`Timeout in ms, >= 100 (current ${clf.timeoutMs})`, String(clf.timeoutMs));
 			if (!value) continue;
@@ -1975,7 +1998,7 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 				ctx.ui.notify("Invalid timeout; needs a number >= 100.", "warning");
 				continue;
 			}
-			await save({ classifier: { ...clf, timeoutMs: Math.round(parsed) } }, `classifier.timeoutMs = ${Math.round(parsed)} saved`);
+			await save({ classifier: { timeoutMs: Math.round(parsed) } }, `classifier.timeoutMs = ${Math.round(parsed)} saved`);
 		} else if (pick.startsWith("Max attempts")) {
 			const value = await ctx.ui.input(`Attempts 1..10 (current ${clf.maxAttempts})`, String(clf.maxAttempts));
 			if (!value) continue;
@@ -1984,7 +2007,7 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 				ctx.ui.notify("Invalid attempts; needs an integer 1..10.", "warning");
 				continue;
 			}
-			await save({ classifier: { ...clf, maxAttempts: parsed } }, `classifier.maxAttempts = ${parsed} saved`);
+			await save({ classifier: { maxAttempts: parsed } }, `classifier.maxAttempts = ${parsed} saved`);
 		}
 	}
 }
@@ -2016,10 +2039,10 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 			if (pick) await save({ fallback: pick }, `fallback = ${pick} saved`);
 		} else if (edit.startsWith("Scoring")) {
 			const pick = await ctx.ui.select("Scoring", ["enabled", "disabled"]);
-			if (pick) await save({ scoring: { ...config.scoring, enabled: pick === "enabled" } }, `scoring ${pick} saved`);
+			if (pick) await save({ scoring: { enabled: pick === "enabled" } }, `scoring ${pick} saved`);
 		} else if (edit.startsWith("Price auto-refresh")) {
 			const pick = await ctx.ui.select("Price auto-refresh", ["enabled", "disabled"]);
-			if (pick) await save({ prices: { ...config.prices, enabled: pick === "enabled" } }, `price auto-refresh ${pick} saved`);
+			if (pick) await save({ prices: { enabled: pick === "enabled" } }, `price auto-refresh ${pick} saved`);
 		} else if (edit.startsWith("Classifier")) {
 			await classifierMenu(ctx, getConfig, save);
 		} else if (edit === "Enable/disable a model") {
