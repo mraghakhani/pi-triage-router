@@ -19,7 +19,7 @@
  * Usage: pi --model laya/auto
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Message, Usage } from "@earendil-works/pi-ai";
@@ -42,7 +42,20 @@ import {
 	type ScoringConfig,
 } from "./triage-router-lib/triage-router-benchmarks.ts";
 import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
-import { formatDashboard, recordCost, recordRoute } from "./triage-router-lib/triage-router-dashboard.ts";
+import {
+	costSummary,
+	cacheSummary,
+	configSummary,
+	formatDashboard,
+	historyOptions,
+	modelDetail,
+	modelOptions,
+	recordCost,
+	recordRoute,
+	routeHistory,
+	sessionCost,
+	usdLabel,
+} from "./triage-router-lib/triage-router-dashboard.ts";
 import {
 	callDecisions,
 	classifierEndpoint,
@@ -806,6 +819,70 @@ export function loadConfig(path: string = CONFIG_PATH): RouterConfig {
 		console.error(`${LOG_PREFIX} config unreadable, using defaults:`, err);
 		return validateConfig({});
 	}
+}
+
+/** The effective config serialized for writing: defaults minus runtime-only fields.
+ * `problems` and the package-internal `seedPath` values never belong in a
+ * config file (validateConfig rejects both as unknown keys). */
+function effectiveConfigRaw(): Record<string, unknown> {
+	const { problems, ...rest } = validateConfig({});
+	const raw = JSON.parse(JSON.stringify(rest)) as Record<string, unknown>;
+	if (raw.benchmarks) delete (raw.benchmarks as Record<string, unknown>).seedPath;
+	if (raw.prices) delete (raw.prices as Record<string, unknown>).seedPath;
+	return raw;
+}
+
+/**
+ * Apply a patch to the config file and write it atomically. Patch values that
+ * are plain objects merge one level into the existing section; everything else
+ * (including arrays and null) is assigned. Unknown keys in the file survive.
+ * Returns the revalidated config; problems are logged like loadConfig does.
+ * Only the /triage menu calls this - routing itself stays read-only.
+ */
+export function updateConfigFile(path: string, patch: Record<string, unknown>): RouterConfig {
+	let raw: Record<string, unknown>;
+	try {
+		const parsed = JSON.parse(readFileSync(path, "utf8"));
+		raw =
+			typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+				? (parsed as Record<string, unknown>)
+				: effectiveConfigRaw();
+	} catch {
+		// Missing or unreadable file: start from the effective defaults so the
+		// first menu edit materializes a complete, valid config.
+		raw = effectiveConfigRaw();
+	}
+	for (const [key, value] of Object.entries(patch)) {
+		if (
+			value !== null &&
+			typeof value === "object" &&
+			!Array.isArray(value) &&
+			typeof raw[key] === "object" &&
+			raw[key] !== null &&
+			!Array.isArray(raw[key])
+		) {
+			raw[key] = { ...(raw[key] as Record<string, unknown>), ...value };
+		} else if (value === undefined) {
+			delete raw[key];
+		} else {
+			raw[key] = value;
+		}
+	}
+	// `seedPath` is runtime-injected (package-internal seed), never a config-file
+	// key - strip it so menu patches never materialize it in the file.
+	for (const section of ["benchmarks", "prices"] as const) {
+		const value = raw[section];
+		if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+			delete (value as Record<string, unknown>).seedPath;
+		}
+	}
+	const config = validateConfig(raw);
+	mkdirSync(dirname(path), { recursive: true });
+	const tmp = `${path}.tmp`;
+	writeFileSync(tmp, `${JSON.stringify(raw, null, "\t")}\n`);
+	renameSync(tmp, path);
+	for (const problem of config.problems) console.error(`${LOG_PREFIX} config: ${problem}`);
+	return config;
 }
 
 // ---------------------------------------------------------------------------
@@ -1804,6 +1881,188 @@ function safeContextTokens(ctx: ExtensionContext): number | null {
 }
 
 // ---------------------------------------------------------------------------
+// /triage interactive menu (TUI dialogs; never writes to the chat transcript)
+// ---------------------------------------------------------------------------
+
+const MENU_BACK = "Back";
+const MENU_DONE = "Done";
+
+/** Extracts the "provider/id" prefix from a menu option line. */
+function compositeFromOptionLine(line: string, config: RouterConfig): ModelEntry | null {
+	const id = line.split(" · ")[0];
+	return config.models.find((m) => composite(m) === id) ?? null;
+}
+
+/** A /triage menu save: write the patch, refresh the shared config, confirm. */
+type MenuSave = (patch: Record<string, unknown>, note: string) => Promise<void>;
+/** Reads the current config (post-save) so menu loops never use stale state. */
+type GetConfig = () => RouterConfig;
+
+function makeSave(ctx: ExtensionContext, setConfig: (c: RouterConfig) => void): MenuSave {
+	return async (patch, note) => {
+		const config = updateConfigFile(CONFIG_PATH, patch);
+		setConfig(config);
+		ctx.ui.notify(note, "info");
+	};
+}
+
+/** Build the next models array with `enabled` flipped for one id. */
+function toggleModelEnabled(config: RouterConfig, id: string): ModelEntry[] {
+	return config.models.map((m) => (m.id === id ? { ...m, enabled: m.enabled === false } : m));
+}
+
+async function lineupMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
+	for (;;) {
+		const config = getConfig();
+		const pick = await ctx.ui.select("Model lineup", [...modelOptions(config), MENU_BACK]);
+		if (!pick || pick === MENU_BACK) return;
+		const entry = compositeFromOptionLine(pick, config);
+		if (!entry) continue;
+		ctx.ui.notify(modelDetail(config, entry.id), "info");
+		const toggleLabel = entry.enabled === false ? "Enable" : "Disable";
+		const action = await ctx.ui.select(composite(entry), ["Set as manual override", toggleLabel, MENU_BACK]);
+		if (!action || action === MENU_BACK) continue;
+		if (action === "Set as manual override") {
+			await save({ override: composite(entry) }, `override = ${composite(entry)} saved`);
+		} else {
+			await save({ models: toggleModelEnabled(config, entry.id) }, `${composite(entry)} ${toggleLabel.toLowerCase()}d`);
+		}
+	}
+}
+
+async function historyMenu(ctx: ExtensionContext): Promise<void> {
+	for (;;) {
+		const lines = historyOptions();
+		if (lines.length === 0) {
+			ctx.ui.notify("No routes recorded yet this session.", "info");
+			return;
+		}
+		const pick = await ctx.ui.select("Route history (newest first)", [...lines, MENU_BACK]);
+		if (!pick || pick === MENU_BACK) return;
+		ctx.ui.notify(pick, "info");
+	}
+}
+
+async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
+	for (;;) {
+		const clf = getConfig().classifier;
+		const pick = await ctx.ui.select("Classifier settings", [
+			`Provider — ${clf.provider}`,
+			`Model id — ${clf.provider === "local" ? "(unused for local)" : clf.model}`,
+			`Timeout ms — ${clf.timeoutMs}`,
+			`Max attempts — ${clf.maxAttempts}`,
+			MENU_BACK,
+		]);
+		if (!pick || pick === MENU_BACK) return;
+		if (pick.startsWith("Provider")) {
+			const provider = await ctx.ui.select("Classifier provider", ["local", "openrouter", "litellm"]);
+			if (!provider) continue;
+			await save({ classifier: { ...clf, provider } }, `classifier.provider = ${provider} saved`);
+		} else if (pick.startsWith("Model id")) {
+			if (clf.provider === "local") {
+				ctx.ui.notify("Model id is remote-only; set the provider first.", "warning");
+				continue;
+			}
+			const model = await ctx.ui.input("Classifier model id (e.g. typesafe/jev-1.13)", clf.model);
+			const trimmed = model?.trim();
+			if (!trimmed) continue;
+			await save({ classifier: { ...clf, model: trimmed } }, `classifier.model = ${trimmed} saved`);
+		} else if (pick.startsWith("Timeout ms")) {
+			const value = await ctx.ui.input(`Timeout in ms, >= 100 (current ${clf.timeoutMs})`, String(clf.timeoutMs));
+			if (!value) continue;
+			const parsed = Number(value);
+			if (!Number.isFinite(parsed) || parsed < 100) {
+				ctx.ui.notify("Invalid timeout; needs a number >= 100.", "warning");
+				continue;
+			}
+			await save({ classifier: { ...clf, timeoutMs: Math.round(parsed) } }, `classifier.timeoutMs = ${Math.round(parsed)} saved`);
+		} else if (pick.startsWith("Max attempts")) {
+			const value = await ctx.ui.input(`Attempts 1..10 (current ${clf.maxAttempts})`, String(clf.maxAttempts));
+			if (!value) continue;
+			const parsed = Number(value);
+			if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+				ctx.ui.notify("Invalid attempts; needs an integer 1..10.", "warning");
+				continue;
+			}
+			await save({ classifier: { ...clf, maxAttempts: parsed } }, `classifier.maxAttempts = ${parsed} saved`);
+		}
+	}
+}
+
+async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
+	for (;;) {
+		const config = getConfig();
+		const eligible = config.models.filter((m) => m.enabled !== false).map((m) => composite(m));
+		const clf = config.classifier;
+		const edit = await ctx.ui.select("Edit config", [
+			`Manual override — ${config.override ?? "none"}`,
+			`Fallback policy — ${config.fallback}`,
+			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
+			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
+			`Classifier — ${clf.provider}${clf.provider === "local" ? "" : ` (${clf.model})`}`,
+			"Enable/disable a model",
+			MENU_BACK,
+		]);
+		if (!edit || edit === MENU_BACK) return;
+		if (edit.startsWith("Manual override")) {
+			const pick = await ctx.ui.select("Manual override", ["(none)", ...eligible]);
+			if (!pick) continue;
+			await save(
+				{ override: pick === "(none)" ? null : pick },
+				pick === "(none)" ? "override cleared" : `override = ${pick} saved`,
+			);
+		} else if (edit.startsWith("Fallback policy")) {
+			const pick = await ctx.ui.select("Fallback policy", ["cheapest", "strongest"]);
+			if (pick) await save({ fallback: pick }, `fallback = ${pick} saved`);
+		} else if (edit.startsWith("Scoring")) {
+			const pick = await ctx.ui.select("Scoring", ["enabled", "disabled"]);
+			if (pick) await save({ scoring: { ...config.scoring, enabled: pick === "enabled" } }, `scoring ${pick} saved`);
+		} else if (edit.startsWith("Price auto-refresh")) {
+			const pick = await ctx.ui.select("Price auto-refresh", ["enabled", "disabled"]);
+			if (pick) await save({ prices: { ...config.prices, enabled: pick === "enabled" } }, `price auto-refresh ${pick} saved`);
+		} else if (edit.startsWith("Classifier")) {
+			await classifierMenu(ctx, getConfig, save);
+		} else if (edit === "Enable/disable a model") {
+			const pick = await ctx.ui.select("Models", modelOptions(config));
+			if (!pick) continue;
+			const entry = compositeFromOptionLine(pick, config);
+			if (!entry) continue;
+			const label = entry.enabled === false ? "enabled" : "disabled";
+			await save({ models: toggleModelEnabled(config, entry.id) }, `${composite(entry)} ${label} saved`);
+		}
+	}
+}
+
+/** Interactive /triage dashboard loop. Esc/"Done" exits. */
+async function triageMenu(ctx: ExtensionContext): Promise<void> {
+	let config = loadConfig();
+	const getConfig: GetConfig = () => config;
+	const save = makeSave(ctx, (c) => {
+		config = c;
+	});
+	for (;;) {
+		const enabled = config.models.filter((m) => m.enabled !== false).length;
+		const total = sessionCost().total;
+		const choice = await ctx.ui.select("pi-triage-router — dashboard", [
+			`Model lineup (${enabled}/${config.models.length} active)`,
+			`Session cost${total != null ? ` — ${usdLabel(total)}` : ""}`,
+			`Route history (${routeHistory().length} routes)`,
+			"Cache status",
+			"Current config",
+			"Edit config",
+			MENU_DONE,
+		]);
+		if (!choice || choice === MENU_DONE) return;
+		if (choice.startsWith("Model lineup")) await lineupMenu(ctx, getConfig, save);
+		else if (choice.startsWith("Session cost")) ctx.ui.notify(costSummary(), "info");
+		else if (choice.startsWith("Route history")) await historyMenu(ctx);
+		else if (choice === "Cache status") ctx.ui.notify(cacheSummary(config), "info");
+		else if (choice === "Current config") ctx.ui.notify(configSummary(config), "info");
+		else if (choice === "Edit config") await editMenu(ctx, getConfig, save);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Extension entry point
 // ---------------------------------------------------------------------------
 
@@ -1844,19 +2103,24 @@ export default function (pi: ExtensionAPI) {
 			},
 		});
 	}
-	// /triage dashboard: session lineup, prices, estimated cost, routing history.
+	// /triage dashboard: interactive menu in the TUI (no chat output);
+	// JSON/print modes have no dialogs and fall back to the Markdown report.
 	// Guarded so older pi builds without registerCommand still load the router.
 	if (typeof pi.registerCommand === "function") {
 		pi.registerCommand("triage", {
 			description:
-				"Show the pi-triage-router dashboard: model lineup, prices, session cost, routing history",
-			handler: async () => {
-				pi.sendMessage({
-					customType: "triage-dashboard",
-					content: formatDashboard(loadConfig()),
-					display: true,
-					details: undefined,
-				});
+				"pi-triage-router dashboard: model lineup, session cost, routing history, live config edits",
+			handler: async (_args, ctx) => {
+				if (ctx.mode === "tui" && ctx.hasUI && typeof ctx.ui?.select === "function") {
+					await triageMenu(ctx);
+				} else {
+					pi.sendMessage({
+						customType: "triage-dashboard",
+						content: formatDashboard(loadConfig()),
+						display: true,
+						details: undefined,
+					});
+				}
 			},
 		});
 	}

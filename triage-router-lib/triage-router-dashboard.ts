@@ -92,6 +92,11 @@ function usd(value: number | null | undefined): string {
 	return typeof value === "number" ? `$${value.toFixed(4)}` : "-";
 }
 
+/** USD label for menu lines (e.g. "$0.0123", "-" when unknown). */
+export function usdLabel(value: number | null | undefined): string {
+	return usd(value);
+}
+
 function composite(entry: Pick<ModelEntry, "provider" | "id">): string {
 	return `${entry.provider}/${entry.id}`;
 }
@@ -209,6 +214,69 @@ function configSection(config: RouterConfig): string {
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
 	lines.push("");
 	return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Interactive menu helpers (TUI dialogs; no chat output)
+// ---------------------------------------------------------------------------
+
+/** One select-option line per configured model. */
+export function modelOptionLine(config: RouterConfig, entry: ModelEntry): string {
+	const price = reportPrice(config, entry);
+	const quality = benchmarkQuality(config, entry.id);
+	const status = entry.enabled === false ? "disabled" : "active";
+	return `${composite(entry)} · in ${usd(price.input)} · out ${usd(price.output)} · coding ${quality ?? "-"} · ${status}`;
+}
+
+/** Select-option lines for the model lineup. */
+export function modelOptions(config: RouterConfig): string[] {
+	return config.models.map((entry) => modelOptionLine(config, entry));
+}
+
+/** Multiline detail (for a notify) of one configured model. */
+export function modelDetail(config: RouterConfig, id: string): string {
+	const entry = config.models.find((m) => m.id === id);
+	if (!entry) return "unknown model";
+	const price = reportPrice(config, entry);
+	const quality = benchmarkQuality(config, entry.id);
+	return [
+		composite(entry),
+		`prices: in ${usd(price.input)}/M · out ${usd(price.output)}/M (${price.source})`,
+		`coding index: ${quality ?? "-"}`,
+		`status: ${entry.enabled === false ? "disabled" : "active"}`,
+		`description: ${entry.description}`,
+	].join("\n");
+}
+
+/** Select-option lines for the session route history, newest first. */
+export function historyOptions(): string[] {
+	return [...history]
+		.reverse()
+		.map((r) => `${timeLabel(r.timestamp)} · ${r.model} · ${r.rule} · ${r.complexity} · ${r.category} · ${usd(r.cost)}`);
+}
+
+/** Multiline session-cost summary (for a notify). */
+export function costSummary(): string {
+	const { total, byModel } = sessionCost();
+	const lines = [`Total this session: ${usd(total)} across ${history.length} routed request(s).`];
+	for (const [model, cost] of Object.entries(byModel).sort((a, b) => b[1] - a[1])) {
+		lines.push(`- ${model}: ${usd(cost)}`);
+	}
+	return lines.join("\n");
+}
+
+/** Multiline cache-status summary (for a notify). */
+export function cacheSummary(config: RouterConfig): string {
+	return cacheSection(config)
+		.replace(/^##.*\n+/, "")
+		.replace(/\n$/, "");
+}
+
+/** Multiline config summary (for a notify). */
+export function configSummary(config: RouterConfig): string {
+	return configSection(config)
+		.replace(/^##.*\n+/, "")
+		.replace(/\n$/, "");
 }
 
 /** Full dashboard report (Markdown) for the /triage command. */

@@ -561,12 +561,15 @@ cost of D but 0.39x the cost of E.
 
 ### `/triage` dashboard
 
-The extension registers a `/triage` slash command that prints a session
-dashboard into the transcript:
+The extension registers a `/triage` slash command that opens an interactive
+menu (pi dialogs - the dashboard never writes into the chat transcript;
+JSON/print modes without dialogs fall back to a Markdown report message):
 
 - **Model lineup** - every configured entry with its USD/1M-token prices
   (auto-refreshed catalog price wins over the config `priceIn`/`priceOut`),
   the cached `coding` benchmark index, and its status (active/disabled).
+  Picking a model shows its detail and actions: set it as the manual
+  override, or enable/disable it.
 - **Session cost** - the running **estimated** total across the routes
   recorded this session, plus a per-model breakdown. Estimates come from the
   routing decision's `estCostIn`/`estCostOut` (see above); they are never
@@ -574,8 +577,24 @@ dashboard into the transcript:
 - **Route history** - the last 50 routes of this session (newest first):
   time, model, rule, complexity, category, and estimated cost.
 - **Cache status** - benchmark and price cache freshness/coverage.
-- **Config** - classifier backend, jev backend, fallback policy, override,
-  and scoring state.
+- **Current config** - classifier backend, jev backend, fallback policy,
+  override, and scoring state.
+
+**Edit config** (from the menu) writes changes straight into
+`triage-router.json` - atomically, revalidated, with unknown keys preserved,
+and picked up by the router without a restart (the config file is
+mtime-reloaded on the next route). Editable from the menu:
+
+- **Manual override** - pin all routes to one eligible model, or clear it.
+- **Fallback policy** - `cheapest` or `strongest`.
+- **Scoring** and **price auto-refresh** - enabled/disabled.
+- **Classifier settings** - provider (`local`/`openrouter`/`litellm`),
+  remote model id, timeout (ms), and retry attempts (1..10).
+- **Enable/disable a model** - keep the entry in the config without ever
+  routing to it.
+
+The first menu edit on an install without a config file materializes a
+complete, valid `triage-router.json` from the effective defaults.
 
 History and totals are in-memory and per-session: nothing is written to
 disk, and no conversation content is recorded - only ids, rules, and costs.
