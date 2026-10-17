@@ -1953,10 +1953,36 @@ async function historyMenu(ctx: ExtensionContext): Promise<void> {
 	}
 }
 
+/** Shared prompt for a classifier timeout (ms >= 100); null = cancelled/invalid. */
+async function promptTimeoutMs(ctx: ExtensionContext, current: number): Promise<number | null> {
+	const value = await ctx.ui.input(`Timeout in ms, >= 100 (current ${current})`, String(current));
+	if (!value) return null;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 100) {
+		ctx.ui.notify("Invalid timeout; needs a number >= 100.", "warning");
+		return null;
+	}
+	return Math.round(parsed);
+}
+
+/** Shared prompt for classifier retry attempts (integer 1..10); null = cancelled/invalid. */
+async function promptAttempts(ctx: ExtensionContext, current: number): Promise<number | null> {
+	const value = await ctx.ui.input(`Attempts 1..10 (current ${current})`, String(current));
+	if (!value) return null;
+	const parsed = Number(value);
+	if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+		ctx.ui.notify("Invalid attempts; needs an integer 1..10.", "warning");
+		return null;
+	}
+	return parsed;
+}
+
+/** Edits the laya classifier section: backs laya/auto (local Laya by default,
+ * optionally pointed at a remote provider). */
 async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
 	for (;;) {
 		const clf = getConfig().classifier;
-		const pick = await ctx.ui.select("Classifier settings", [
+		const pick = await ctx.ui.select("Laya classifier (laya/auto)", [
 			`Provider — ${clf.provider}`,
 			`Model id — ${clf.provider === "local" ? "(unused for local)" : clf.model}`,
 			`Timeout ms — ${clf.timeoutMs}`,
@@ -1991,23 +2017,59 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 			if (!trimmed) continue;
 			await save({ classifier: { model: trimmed } }, `classifier.model = ${trimmed} saved`);
 		} else if (pick.startsWith("Timeout ms")) {
-			const value = await ctx.ui.input(`Timeout in ms, >= 100 (current ${clf.timeoutMs})`, String(clf.timeoutMs));
-			if (!value) continue;
-			const parsed = Number(value);
-			if (!Number.isFinite(parsed) || parsed < 100) {
-				ctx.ui.notify("Invalid timeout; needs a number >= 100.", "warning");
-				continue;
-			}
-			await save({ classifier: { timeoutMs: Math.round(parsed) } }, `classifier.timeoutMs = ${Math.round(parsed)} saved`);
+			const timeoutMs = await promptTimeoutMs(ctx, clf.timeoutMs);
+			if (timeoutMs != null) await save({ classifier: { timeoutMs } }, `classifier.timeoutMs = ${timeoutMs} saved`);
 		} else if (pick.startsWith("Max attempts")) {
-			const value = await ctx.ui.input(`Attempts 1..10 (current ${clf.maxAttempts})`, String(clf.maxAttempts));
-			if (!value) continue;
-			const parsed = Number(value);
-			if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
-				ctx.ui.notify("Invalid attempts; needs an integer 1..10.", "warning");
-				continue;
-			}
-			await save({ classifier: { maxAttempts: parsed } }, `classifier.maxAttempts = ${parsed} saved`);
+			const maxAttempts = await promptAttempts(ctx, clf.maxAttempts);
+			if (maxAttempts != null) await save({ classifier: { maxAttempts } }, `classifier.maxAttempts = ${maxAttempts} saved`);
+		}
+	}
+}
+
+/** Edits the jev classifier section: backs jev/auto (remote-only, openrouter or
+ * litellm). When unconfigured, offers to write a full jev section - jev/auto
+ * registers at extension load, so a restart is needed for it to appear. */
+async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
+	for (;;) {
+		const jev = getConfig().jev;
+		if (!jev) {
+			const pick = await ctx.ui.select("Jev classifier (jev/auto)", ["Not configured - set it up", MENU_BACK]);
+			if (!pick || pick === MENU_BACK) return;
+			const provider = await ctx.ui.select("Jev provider", ["openrouter", "litellm"]);
+			if (!provider) continue;
+			const model = await ctx.ui.input("Jev model id (e.g. typesafe/jev-1.13)", "typesafe/jev-1.13");
+			const trimmed = model?.trim();
+			if (!trimmed) continue;
+			await save(
+				{ jev: { provider, model: trimmed } },
+				`jev = ${provider}/${trimmed} saved - jev/auto appears in /models after restart`,
+			);
+			continue;
+		}
+		const pick = await ctx.ui.select("Jev classifier (jev/auto)", [
+			`Provider — ${jev.provider}`,
+			`Model id — ${jev.model}`,
+			`Timeout ms — ${jev.timeoutMs}`,
+			`Max attempts — ${jev.maxAttempts}`,
+			MENU_BACK,
+		]);
+		if (!pick || pick === MENU_BACK) return;
+		if (pick.startsWith("Provider")) {
+			// No "local": the jev entry is the remote backend by definition.
+			const provider = await ctx.ui.select("Jev provider", ["openrouter", "litellm"]);
+			if (!provider) continue;
+			await save({ jev: { provider } }, `jev.provider = ${provider} saved`);
+		} else if (pick.startsWith("Model id")) {
+			const model = await ctx.ui.input("Jev model id (e.g. typesafe/jev-1.13)", jev.model);
+			const trimmed = model?.trim();
+			if (!trimmed) continue;
+			await save({ jev: { model: trimmed } }, `jev.model = ${trimmed} saved`);
+		} else if (pick.startsWith("Timeout ms")) {
+			const timeoutMs = await promptTimeoutMs(ctx, jev.timeoutMs);
+			if (timeoutMs != null) await save({ jev: { timeoutMs } }, `jev.timeoutMs = ${timeoutMs} saved`);
+		} else if (pick.startsWith("Max attempts")) {
+			const maxAttempts = await promptAttempts(ctx, jev.maxAttempts);
+			if (maxAttempts != null) await save({ jev: { maxAttempts } }, `jev.maxAttempts = ${maxAttempts} saved`);
 		}
 	}
 }
@@ -2017,12 +2079,14 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		const config = getConfig();
 		const eligible = config.models.filter((m) => m.enabled !== false).map((m) => composite(m));
 		const clf = config.classifier;
+		const jev = config.jev;
 		const edit = await ctx.ui.select("Edit config", [
 			`Manual override — ${config.override ?? "none"}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
-			`Classifier — ${clf.provider}${clf.provider === "local" ? "" : ` (${clf.model})`}`,
+			`Laya classifier — ${clf.provider}${clf.provider === "local" ? "" : ` (${clf.model})`}`,
+			`Jev classifier — ${jev ? `${jev.provider} (${jev.model})` : "not configured"}`,
 			"Enable/disable a model",
 			MENU_BACK,
 		]);
@@ -2043,8 +2107,10 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		} else if (edit.startsWith("Price auto-refresh")) {
 			const pick = await ctx.ui.select("Price auto-refresh", ["enabled", "disabled"]);
 			if (pick) await save({ prices: { enabled: pick === "enabled" } }, `price auto-refresh ${pick} saved`);
-		} else if (edit.startsWith("Classifier")) {
+		} else if (edit.startsWith("Laya classifier")) {
 			await classifierMenu(ctx, getConfig, save);
+		} else if (edit.startsWith("Jev classifier")) {
+			await jevClassifierMenu(ctx, getConfig, save);
 		} else if (edit === "Enable/disable a model") {
 			const pick = await ctx.ui.select("Models", modelOptions(config));
 			if (!pick) continue;

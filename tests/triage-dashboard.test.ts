@@ -72,7 +72,7 @@ test("formatDashboard renders lineup, history, cache, and config sections", () =
 	assert.ok(report.includes("## Cache status"));
 	assert.ok(report.includes("- Prices: disabled"), "test config disables the price cache");
 	assert.ok(report.includes("## Config"));
-	assert.ok(report.includes("- Classifier: local"));
+	assert.ok(report.includes("- Laya classifier: local"));
 	assert.ok(report.includes("- Jev backend: not configured"));
 });
 
@@ -128,7 +128,7 @@ test("costSummary, cacheSummary, configSummary are chat-free multiline texts", (
 	assert.ok(cache.includes("Prices: disabled"));
 	const conf = configSummary(testConfig());
 	assert.ok(!conf.includes("##"));
-	assert.ok(conf.includes("Classifier: local"));
+	assert.ok(conf.includes("Laya classifier: local"));
 	assert.ok(conf.includes("Fallback: cheapest"));
 });
 
@@ -219,6 +219,37 @@ test("menu patches never materialize the runtime seedPath in the config file", (
 	assert.ok(!("seedPath" in raw.prices), "prices.seedPath stripped");
 	assert.ok(!("seedPath" in raw.benchmarks), "benchmarks.seedPath stripped");
 	assert.equal(raw.prices.enabled, false, "the actual edit survives");
+});
+
+test("updateConfigFile creates a complete jev section when the file has none", () => {
+	const path = join(configDir, "triage-router.json");
+	const config = router.updateConfigFile(path, { jev: { provider: "openrouter", model: "typesafe/jev-1.13" } });
+	assert.ok(config.jev, "jev section exists after patch");
+	assert.equal(config.jev.provider, "openrouter");
+	assert.equal(config.jev.model, "typesafe/jev-1.13");
+	assert.equal(config.jev.timeoutMs, 5000, "jev defaults fill in for the absent section");
+	// Reload from disk: same result, and getClassifier-style precedence holds.
+	const reloaded = router.loadConfig(path);
+	assert.ok(reloaded.jev);
+	assert.equal(reloaded.jev.model, "typesafe/jev-1.13");
+});
+
+test("updateConfigFile merges jev patches into an existing jev section", () => {
+	const path = join(configDir, "triage-router.json");
+	router.updateConfigFile(path, { jev: { provider: "openrouter", model: "typesafe/jev-1.13", timeoutMs: 3000 } });
+	const config = router.updateConfigFile(path, { jev: { model: "typesafe/jev-2" } });
+	assert.ok(config.jev);
+	assert.equal(config.jev.model, "typesafe/jev-2", "patched field applied");
+	assert.equal(config.jev.timeoutMs, 3000, "existing jev field preserved by merge");
+	assert.equal(config.jev.provider, "openrouter");
+});
+
+test("updateConfigFile rejects a local provider for the jev section", () => {
+	const path = join(configDir, "triage-router.json");
+	const config = router.updateConfigFile(path, { jev: { provider: "local" } });
+	assert.ok(config.problems.some((p) => p.includes('"jev.provider"')));
+	assert.ok(config.jev);
+	assert.notEqual(config.jev.provider, "local", "jev stays a remote provider");
 });
 
 test("rapid successive saves never serve a stale cached config", () => {

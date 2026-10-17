@@ -201,7 +201,7 @@ function configSection(config: RouterConfig): string {
 	const lines = ["## Config", ""];
 	const classifier = config.classifier;
 	lines.push(
-		`- Classifier: ${classifier.provider}${classifier.provider === "local" ? "" : ` (${classifier.provider}/${classifier.model})`}`,
+		`- Laya classifier: ${classifier.provider}${classifier.provider === "local" ? "" : ` (${classifier.provider}/${classifier.model})`}`,
 	);
 	const jev = config.jev;
 	lines.push(
