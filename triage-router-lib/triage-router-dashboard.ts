@@ -102,7 +102,9 @@ function composite(entry: Pick<ModelEntry, "provider" | "id">): string {
 }
 
 function timeLabel(timestamp: number): string {
-	return new Date(timestamp).toLocaleTimeString();
+	// Hour+minute only: full toLocaleTimeString made the history row 102
+	// chars with a realistic-long model id (past the 100-char audit).
+	return new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 /** Price used by the report: cached catalog price wins over config price. */

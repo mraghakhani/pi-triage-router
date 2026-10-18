@@ -99,6 +99,14 @@ test("formatDashboard: no line exceeds 100 chars (no wrap on wide terminals)", (
 		classifier: { provider: "litellm", id: "deepseek/deepseek-v4-flash", apiKeyEnv: "LITELLM_API_KEY" },
 		override: "litellm/deepseek/deepseek-v4-flash",
 	});
+	// Also cover the history table: longest realistic composite in a cell.
+	recordRoute({
+		model: "openrouter/qwen/qwen3.8-max-thinking-preview",
+		rule: "direct",
+		complexity: "standard",
+		category: "question",
+		cost: 0.0012,
+	});
 	for (const report of [formatDashboard(config), formatDashboard(testConfig())]) {
 		for (const line of report.split("\n")) {
 			assert.ok(
