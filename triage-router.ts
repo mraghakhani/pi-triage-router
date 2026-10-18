@@ -2261,8 +2261,16 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		const eligible = config.models.filter((m) => m.enabled !== false).map((m) => composite(m));
 		const clf = config.classifier;
 		const jev = config.jev;
+		const activeLabel = () => {
+			const n = config.activeGroup;
+			if (!n) return "none (full catalog)";
+			const refs = config.groups?.[n];
+			return Array.isArray(refs) ? `"${n}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${n}"`;
+		};
+		const groupNames = Object.keys(config.groups);
 		const edit = await ctx.ui.select("Edit config", [
 			`Manual override — ${config.override ?? "none"}`,
+			`Active group — ${activeLabel()}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
@@ -2279,6 +2287,17 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 				{ override: pick === "(none)" ? null : pick },
 				pick === "(none)" ? "override cleared" : `override = ${pick} saved`,
 			);
+		} else if (edit.startsWith("Active group")) {
+			const picks = ["(none — full catalog)", ...groupNames];
+			const pick = await ctx.ui.select("Active group", picks);
+			if (!pick) continue;
+			if (pick === "(none — full catalog)") {
+				if (config.activeGroup == null) continue;
+				await save({ activeGroup: null }, "activeGroup cleared (full catalog)");
+			} else {
+				if (config.activeGroup === pick) continue;
+				await save({ activeGroup: pick }, `activeGroup = "${pick}" saved`);
+			}
 		} else if (edit.startsWith("Fallback policy")) {
 			const pick = await ctx.ui.select("Fallback policy", ["cheapest", "strongest"]);
 			if (pick) await save({ fallback: pick }, `fallback = ${pick} saved`);
