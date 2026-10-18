@@ -276,3 +276,45 @@ test("loadConfig picks up menu edits without a restart", () => {
 	router.updateConfigFile(path, { fallback: "strongest" });
 	assert.equal(router.loadConfig(path).fallback, "strongest", "mtime change reloads the config");
 });
+
+// resetConfigFile (the /triage menu's "Reset config to defaults")
+
+test("resetConfigFile restores the shipped defaults and backs up the current file", () => {
+	const path = join(configDir, "triage-router.json");
+	router.updateConfigFile(path, { override: "litellm/a/b", scoring: { enabled: false }, jev: null });
+	const { config, backupPath } = router.resetConfigFile(path);
+	assert.ok(backupPath, "a timestamped backup of the previous file is written");
+	const backup = JSON.parse(readFileSync(backupPath, "utf8"));
+	assert.equal(backup.override, "litellm/a/b", "the backup holds the pre-reset state");
+	assert.equal(backup.scoring.enabled, false);
+	assert.equal(backup.jev, null);
+	// The file now matches the shipped bundle exactly (raw object equality).
+	const shipped = JSON.parse(readFileSync(new URL("../triage-router.json", import.meta.url), "utf8"));
+	assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), shipped);
+	// And the revalidated config reflects it: full lineup, litellm jev, no override.
+	assert.equal(config.models.length, shipped.models.length);
+	assert.ok(config.models.length > 1, "the shipped lineup is restored, not the single fallback model");
+	assert.equal(config.jev?.provider, "litellm");
+	assert.equal(config.override, undefined, "the shipped bundle has no override");
+	assert.ok(config.models.every((m) => m.enabled !== false));
+});
+
+test("resetConfigFile with no previous file writes the defaults and reports no backup", () => {
+	const path = join(configDir, "triage-router.json");
+	const { config, backupPath } = router.resetConfigFile(path);
+	assert.equal(backupPath, null);
+	assert.ok(config.models.length > 1, "shipped lineup restored");
+	assert.ok(config.jev, "shipped defaults configure the jev backend");
+});
+
+test("resetConfigFile invalidates the cache; loadConfig serves the reset file", () => {
+	const path = join(configDir, "triage-router.json");
+	router.updateConfigFile(path, { fallback: "strongest" });
+	assert.equal(router.loadConfig(path).fallback, "strongest");
+	router.resetConfigFile(path);
+	assert.notEqual(
+		router.loadConfig(path).fallback,
+		"strongest",
+		"reset reloads from the shipped bundle, not the pre-reset cache",
+	);
+});

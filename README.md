@@ -609,6 +609,11 @@ mtime-reloaded on the next route). Editable from the menu:
   "could not connect to provider ..." when the provider is unreachable.
 - **Enable/disable a model** - keep the entry in the config without ever
   routing to it.
+- **Reset config to defaults** - restores the shipped `triage-router.json`
+  (full model lineup, litellm jev backend, default policies). The current file
+  is copied to a timestamped `triage-router.json.backup-...` file first, so a
+  reset is always undoable. Needs confirmation, and a restart when the jev
+  backend's presence changes (`/models` registration happens at load).
 
 The first menu edit on an install without a config file materializes a
 complete, valid `triage-router.json` from the effective defaults.

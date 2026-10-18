@@ -880,6 +880,13 @@ export function updateConfigFile(path: string, patch: Record<string, unknown>): 
 			raw[key] = value;
 		}
 	}
+	return writeConfigRaw(path, raw);
+}
+
+/** Validate, write atomically, and invalidate the loadConfig cache - shared by
+ * every config writer. `seedPath` is runtime-injected (package-internal seed),
+ * never a config-file key, so it is stripped before writing. */
+function writeConfigRaw(path: string, raw: Record<string, unknown>): RouterConfig {
 	// `seedPath` is runtime-injected (package-internal seed), never a config-file
 	// key - strip it so menu patches never materialize it in the file.
 	for (const section of ["benchmarks", "prices"] as const) {
@@ -899,6 +906,34 @@ export function updateConfigFile(path: string, patch: Record<string, unknown>): 
 	cachedConfig = null;
 	for (const problem of config.problems) console.error(`${LOG_PREFIX} config: ${problem}`);
 	return config;
+}
+
+/** Reset the config file to the shipped defaults (the bundled triage-router.json,
+ * falling back to the effective defaults when the bundle is unreadable). The
+ * current file is copied to a timestamped backup first, so a reset is never
+ * destructive beyond undo. Returns the revalidated config and the backup path
+ * (null when there was no previous file). Only the /triage menu calls this. */
+export function resetConfigFile(path: string = CONFIG_PATH): { config: RouterConfig; backupPath: string | null } {
+	let current: string | null = null;
+	try {
+		current = readFileSync(path, "utf8");
+	} catch {
+		// No previous file: nothing to back up.
+	}
+	let backupPath: string | null = null;
+	if (current !== null) {
+		// A failed backup aborts the reset (the error propagates) - the reset
+		// never destroys the only copy of the user's config.
+		backupPath = `${path}.backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+		writeFileSync(backupPath, current);
+	}
+	let raw: Record<string, unknown>;
+	try {
+		raw = JSON.parse(readFileSync(join(HERE, "triage-router.json"), "utf8")) as Record<string, unknown>;
+	} catch {
+		raw = effectiveConfigRaw();
+	}
+	return { config: writeConfigRaw(path, raw), backupPath };
 }
 
 // ---------------------------------------------------------------------------
@@ -2190,6 +2225,7 @@ async function triageMenu(ctx: ExtensionContext): Promise<void> {
 			"Cache status",
 			"Current config",
 			"Edit config",
+			"Reset config to defaults",
 			MENU_DONE,
 		]);
 		if (!choice || choice === MENU_DONE) return;
@@ -2199,7 +2235,34 @@ async function triageMenu(ctx: ExtensionContext): Promise<void> {
 		else if (choice === "Cache status") ctx.ui.notify(cacheSummary(config), "info");
 		else if (choice === "Current config") ctx.ui.notify(configSummary(config), "info");
 		else if (choice === "Edit config") await editMenu(ctx, getConfig, save);
+		else if (choice === "Reset config to defaults") await resetMenu(ctx, getConfig, (c) => (config = c));
 	}
+}
+
+/** Confirm-and-reset flow: back up the current file, restore the shipped
+ * defaults. /models registration happens at extension load, so a restart is
+ * mentioned when the jev backend's presence changes. */
+async function resetMenu(ctx: ExtensionContext, getConfig: GetConfig, setConfig: (c: RouterConfig) => void): Promise<void> {
+	const confirm = await ctx.ui.select(
+		"Overwrite the config file with the shipped defaults?",
+		["Back up current config and reset", MENU_BACK],
+	);
+	if (!confirm || confirm === MENU_BACK) return;
+	const hadJev = getConfig().jev != null;
+	let result: ReturnType<typeof resetConfigFile>;
+	try {
+		result = resetConfigFile();
+	} catch (err) {
+		ctx.ui.notify(`Reset failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+		return;
+	}
+	setConfig(result.config);
+	const jevChanged = hadJev !== (result.config.jev != null);
+	ctx.ui.notify(
+		`Config reset to shipped defaults${result.backupPath ? ` (backup: ${result.backupPath})` : " (no previous file to back up)"}` +
+			(jevChanged ? " — restart pi for /models changes" : ""),
+		"info",
+	);
 }
 
 // ---------------------------------------------------------------------------
