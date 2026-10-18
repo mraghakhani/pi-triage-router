@@ -465,12 +465,14 @@ test("dashboard: Config section shows the default group (/compact pool), or none
 	);
 });
 
-test("groupLabel: label is correct for both fields, unset uses the given text", () => {
+test("groupLabel: label is correct for both fields, unset defaults to short none", () => {
 	const config = testConfig({
 		groups: { economy: ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"] },
 	});
-	assert.equal(groupLabel(config, "activeGroup", "nope"), "nope");
-	assert.equal(groupLabel(config, "defaultGroup", "fallback"), "fallback");
+	assert.equal(groupLabel(config, "activeGroup"), "none");
+	assert.equal(groupLabel(config, "defaultGroup"), "none");
 	config.activeGroup = "economy";
-	assert.equal(groupLabel(config, "activeGroup", "nope"), '"economy" (2 refs)');
+	assert.equal(groupLabel(config, "activeGroup"), '"economy" (2 refs)');
+	// Explicit override for specialized labels (menu Active row).
+	assert.equal(groupLabel(config, "defaultGroup", "nope"), "nope");
 });

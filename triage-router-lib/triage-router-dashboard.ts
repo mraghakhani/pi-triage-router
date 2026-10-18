@@ -197,10 +197,22 @@ function cacheSection(config: RouterConfig): string {
 	return lines.join("\n");
 }
 
+/** Short unset labels, shared by every call site so future merges need one
+ * change. Verbose fallback chains live in the README and the edit-menu
+ * submenus, not in these labels (80-col wrap safety). */
+const GROUP_UNSET_TEXT = {
+	activeGroup: "none",
+	defaultGroup: "none",
+} as const;
+
 /** One-line group label for the Config section and the edit menu:
- * name + ref count when the field names a defined group, the given
- * fallback text when unset. (Also used for defaultGroup.) */
-export function groupLabel(config: RouterConfig, field: "activeGroup" | "defaultGroup", unsetText: string): string {
+ * name + ref count when the field names a defined group, the short unset
+ * text otherwise (override via unsetText for specialized labels). */
+export function groupLabel(
+	config: RouterConfig,
+	field: "activeGroup" | "defaultGroup",
+	unsetText: string = GROUP_UNSET_TEXT[field],
+): string {
 	const name = config[field];
 	if (!name) return unsetText;
 	const refs = config.groups?.[name];
@@ -232,7 +244,7 @@ function configSection(config: RouterConfig): string {
 	// ("full catalog", "default model, then cheapest") made the merged line
 	// 82 chars and wrapped on 80-col terminals. Detail lives in the README.
 	lines.push(
-		`- Groups: active ${groupLabel(config, "activeGroup", "none")} · default ${groupLabel(config, "defaultGroup", "none")}`,
+		`- Groups: active ${groupLabel(config, "activeGroup")} · default ${groupLabel(config, "defaultGroup")}`,
 	);
 	lines.push(`- Override: ${config.override ?? "none"}`);
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);

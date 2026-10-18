@@ -82,6 +82,33 @@ test("formatDashboard with empty history says so and shows no cost", () => {
 	assert.ok(report.includes("Total this session: **-**"));
 });
 
+test("formatDashboard: no line exceeds 100 chars (no wrap on wide terminals)", () => {
+	// Fat config: long group/model/classifier names produce the longest lines
+	// the dashboard can render. Guards the merged group labels (they wrapped
+	// at 80 cols once already) and any future Config-section additions.
+	const config = testConfig({
+		groups: {
+			"economy-openrouter-cheap": [
+				"litellm/deepseek/deepseek-v4-flash",
+				"litellm/z-ai/glm-5.3-flash",
+				"openrouter/meta-llama/llama-4-scout",
+			],
+		},
+		activeGroup: "economy-openrouter-cheap",
+		defaultGroup: "economy-openrouter-cheap",
+		classifier: { provider: "litellm", id: "deepseek/deepseek-v4-flash", apiKeyEnv: "LITELLM_API_KEY" },
+		override: "litellm/deepseek/deepseek-v4-flash",
+	});
+	for (const report of [formatDashboard(config), formatDashboard(testConfig())]) {
+		for (const line of report.split("\n")) {
+			assert.ok(
+				line.length <= 100,
+				`dashboard line exceeds 100 chars (${line.length}): ${JSON.stringify(line)}`,
+			);
+		}
+	}
+});
+
 test("handleRequest records each routing decision into the session history", async () => {
 	const fake = mockClassifier({ model: {}, complexity: {}, category: {} });
 	router.setLayaForTests(fake);
