@@ -590,10 +590,11 @@ mtime-reloaded on the next route). Editable from the menu:
 - **Manual override** - pin all routes to one eligible model, or clear it.
 - **Fallback policy** - `cheapest` or `strongest`.
 - **Scoring** and **price auto-refresh** - enabled/disabled.
-- **Laya classifier** - the `classifier` section backing `laya/auto`: provider
-  (`local`/`openrouter`/`litellm`), remote model id (remote providers only -
-  the local Laya classifier has no model id), timeout (ms), and retry
-  attempts (1..10).
+- **Laya classifier** - the `classifier` section backing `laya/auto`: timeout
+  (ms) and retry attempts (1..10), plus the remote model id when the config
+  file already points the classifier at a remote provider. The provider is
+  intentionally not editable from the menu - the laya classifier stays local
+  and free; remote providers remain a config-file option.
 - **Jev classifier** - the `jev` section backing `jev/auto` (remote-only:
   `openrouter`/`litellm`, model id, timeout, attempts). If the config has no
   `jev` section yet, the menu offers to write one; `jev/auto` registers at

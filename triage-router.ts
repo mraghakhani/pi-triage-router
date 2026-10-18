@@ -2024,39 +2024,22 @@ async function promptAttempts(ctx: ExtensionContext, current: number): Promise<n
 	return parsed;
 }
 
-/** Edits the laya classifier section: backs laya/auto (local Laya by default,
- * optionally pointed at a remote provider). */
+/** Edits the laya classifier section: backs laya/auto on the local Laya
+ * classifier. The provider is intentionally not editable here - the laya
+ * classifier stays local; remote providers remain a config-file option. */
 async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
 	for (;;) {
 		const clf = getConfig().classifier;
 		const pick = await ctx.ui.select("Laya classifier (laya/auto)", [
-			`Provider — ${clf.provider}`,
 			`Model id — ${clf.provider === "local" ? "(unused for local)" : clf.model}`,
 			`Timeout ms — ${clf.timeoutMs}`,
 			`Max attempts — ${clf.maxAttempts}`,
 			MENU_BACK,
 		]);
 		if (!pick || pick === MENU_BACK) return;
-		if (pick.startsWith("Provider")) {
-			const provider = await ctx.ui.select("Classifier provider", ["local", "openrouter", "litellm"]);
-			if (!provider) continue;
-			if (provider === "local" || clf.provider !== "local") {
-				await save({ classifier: { provider } }, `classifier.provider = ${provider} saved`);
-				continue;
-			}
-			// Switching local -> remote: confirm the remote model id in the same
-			// save so the backend never runs with a local-only model id.
-			const model = await ctx.ui.input(`Classifier model id for ${provider}`, clf.model);
-			const trimmed = model?.trim();
-			if (trimmed) {
-				await save({ classifier: { provider, model: trimmed } }, `classifier = ${provider}/${trimmed} saved`);
-			} else {
-				await save({ classifier: { provider } }, `classifier.provider = ${provider} saved`);
-				ctx.ui.notify("Set the remote model id next - remote calls need it.", "warning");
-			}
-		} else if (pick.startsWith("Model id")) {
+		if (pick.startsWith("Model id")) {
 			if (clf.provider === "local") {
-				ctx.ui.notify("Model id is remote-only; set the provider first.", "warning");
+				ctx.ui.notify("Model id is remote-only; the laya classifier stays local.", "warning");
 				continue;
 			}
 			const model = await ctx.ui.input("Classifier model id (e.g. typesafe/jev-1.13)", clf.model);
