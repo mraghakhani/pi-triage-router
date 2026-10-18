@@ -52,6 +52,7 @@ import {
 import {
 	costSummary,
 	cacheSummary,
+	activeGroupLabel,
 	configSummary,
 	formatDashboard,
 	historyOptions,
@@ -2261,16 +2262,10 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		const eligible = config.models.filter((m) => m.enabled !== false).map((m) => composite(m));
 		const clf = config.classifier;
 		const jev = config.jev;
-		const activeLabel = () => {
-			const n = config.activeGroup;
-			if (!n) return "none (full catalog)";
-			const refs = config.groups?.[n];
-			return Array.isArray(refs) ? `"${n}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${n}"`;
-		};
 		const groupNames = Object.keys(config.groups);
 		const edit = await ctx.ui.select("Edit config", [
 			`Manual override — ${config.override ?? "none"}`,
-			`Active group — ${activeLabel()}`,
+			`Active group — ${activeGroupLabel(config)}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
@@ -2288,6 +2283,11 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 				pick === "(none)" ? "override cleared" : `override = ${pick} saved`,
 			);
 		} else if (edit.startsWith("Active group")) {
+			if (groupNames.length === 0) {
+				// No groups defined in the config file: nothing to switch to.
+				ctx.ui.notify("No groups defined in the config file (add a \"groups\" section first)", "info");
+				continue;
+			}
 			const picks = ["(none — full catalog)", ...groupNames];
 			const pick = await ctx.ui.select("Active group", picks);
 			if (!pick) continue;

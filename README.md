@@ -647,6 +647,9 @@ and picked up by the router without a restart (the config file is
 mtime-reloaded on the next route). Editable from the menu:
 
 - **Manual override** - pin all routes to one eligible model, or clear it.
+- **Active group** - switch the active model group (or clear it back to the
+  full catalog). Only groups defined in the config file are offered; creating
+  and editing groups themselves stays a config-file operation.
 - **Fallback policy** - `cheapest` or `strongest`.
 - **Scoring** and **price auto-refresh** - enabled/disabled.
 - **Laya classifier** - the `classifier` section backing `laya/auto`: timeout

@@ -197,9 +197,10 @@ function cacheSection(config: RouterConfig): string {
 	return lines.join("\n");
 }
 
-/** One-line active-group label for the Config section: name + member count
- * when a group is active, "none (full catalog)" otherwise. */
-function activeGroupLabel(config: RouterConfig): string {
+/** One-line active-group label for the Config section and the edit menu:
+ * name + member count when a group is active, "none (full catalog)"
+ * otherwise. */
+export function activeGroupLabel(config: RouterConfig): string {
 	const name = config.activeGroup;
 	if (!name) return "none (full catalog)";
 	const refs = config.groups?.[name];
