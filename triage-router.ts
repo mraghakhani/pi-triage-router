@@ -838,9 +838,10 @@ export function validateConfig(raw: unknown): RouterConfig {
 		if (value === undefined || value === null) continue;
 		if (typeof value !== "string" || value.trim() === "") {
 			problems.push(`"${key}" must be a non-empty string or null; ignoring`);
-		} else if (!config.groups[value]) {
-			// Warn + ignore at load: routing falls back to the full catalog
-			// (decision #7) instead of breaking the whole config.
+		} else if (!Object.prototype.hasOwnProperty.call(config.groups, value)) {
+			// Own-property check: "constructor"/"toString" otherwise resolve via
+			// the prototype chain and pass. Warn + ignore at load: routing falls
+			// back to the full catalog (decision #7) instead of breaking.
 			problems.push(`"${key}" names no defined group ("${value}"); group filtering off`);
 		} else {
 			config[key] = value;
@@ -1408,7 +1409,7 @@ export function windowEligible(
 	if (excluded.length > 0) {
 		const plural = excluded.length === 1 ? "" : "s";
 		console.error(
-				`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
+			`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
 		);
 	}
 	return fits;

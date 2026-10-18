@@ -203,7 +203,8 @@ function activeGroupLabel(config: RouterConfig): string {
 	const name = config.activeGroup;
 	if (!name) return "none (full catalog)";
 	const refs = config.groups?.[name];
-	return refs ? `"${name}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${name}"`;
+	// Array.isArray: hand-built configs can hold anything on the prototype chain.
+	return Array.isArray(refs) ? `"${name}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${name}"`;
 }
 
 function configSection(config: RouterConfig): string {

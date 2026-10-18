@@ -71,7 +71,10 @@ export function expandGroupRefs(
 			return;
 		}
 		const member = groups[name];
-		if (!member) {
+		// Array.isArray (not truthiness): "@constructor" / "@toString" would
+		// otherwise resolve to inherited Object.prototype members and crash
+		// the recursive expansion (functions are not iterable).
+		if (!Array.isArray(member)) {
 			problems.push(`groups: unknown group "@${name}"`);
 			return;
 		}
@@ -118,6 +121,12 @@ export function validateGroupsSection(
 			problems.push(`groups: "${name}" must be an array of non-empty strings; ignoring`);
 			continue;
 		}
+		if (name === "__proto__") {
+			// Plain-object assignment of "__proto__" mutates the prototype
+			// instead of storing the key; refuse the name outright.
+			problems.push('groups: "__proto__" is a reserved group name; ignoring');
+			continue;
+		}
 		groups[name] = (refs as unknown[]).map((ref) => ref as string);
 	}
 	// Unknown refs and circular references: detect now, at load, so a bad
@@ -139,7 +148,9 @@ export function validateGroupsSection(
  * composites, or null when the group name does not exist. */
 export function groupComposites(config: RouterConfig, name: string): Composite[] | null {
 	const refs = config.groups?.[name];
-	if (!refs) return null;
+	// Array.isArray guard: a config that bypassed validation (direct test
+	// fixtures, hand-built objects) can hold anything; never crash.
+	if (!Array.isArray(refs)) return null;
 	return expandGroupRefs(refs, config.groups, config.models.map((entry) => `${entry.provider}/${entry.id}`), []);
 }
 

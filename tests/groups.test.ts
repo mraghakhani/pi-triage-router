@@ -80,6 +80,40 @@ test("expandGroupRefs: unknown model and unknown group are problems", () => {
 	assert.ok(problems.some((p) => p.includes("unknown group")), "unknown group problem");
 });
 
+test("expandGroupRefs: inherited-prototype names are unknown groups, not crashes", () => {
+	// "constructor"/"toString" resolve to Object.prototype members (functions,
+	// truthy) under a naive truthiness check; functions are not iterable, so
+	// expansion would crash. Array.isArray makes them plain unknown groups.
+	for (const name of ["constructor", "toString", "hasOwnProperty", "valueOf"]) {
+		const problems: string[] = [];
+		const out = expandGroupRefs([`@${name}`], {}, CATALOG_KEYS, problems);
+		assert.deepEqual(out, []);
+		assert.equal(problems.length, 1, `"@${name}" reported as unknown, no throw`);
+	}
+});
+
+test("validateConfig: prototype-chain group names cannot crash load or runtime", () => {
+	// Regression: "@constructor" crashed validateConfig ("list is not iterable")
+	// and activeGroup "constructor" passed validation then crashed every route.
+	// JSON.parse creates "__proto__" as an OWN property (unlike an object
+	// literal, which would set the prototype) - this mirrors real config loads.
+	const parsedGroups = JSON.parse(
+		'{"g": ["@constructor", "litellm/z-ai/glm-5.3"], "__proto__": ["litellm/z-ai/glm-5.3"]}',
+	) as Record<string, string[]>;
+	const config = testConfig({
+		groups: parsedGroups,
+		activeGroup: "constructor",
+		defaultGroup: "toString",
+	});
+	assert.ok(config.problems.some((p) => p.includes('unknown group "@constructor"')));
+	assert.ok(config.problems.some((p) => p.includes('"__proto__" is a reserved group name')));
+	assert.equal(config.activeGroup, null, "inherited name is not a defined group");
+	assert.equal(config.defaultGroup, null);
+	// Runtime expansion must stay safe for configs that bypass validation:
+	const handBuilt = testConfig({ activeGroup: "constructor" as unknown as string });
+	assert.doesNotThrow(() => router.eligibleModels(handBuilt, registryFor(ALL_KEYS)));
+});
+
 test("expandGroupRefs: circular @group references are problems, not hangs", () => {
 	const groups: Record<string, string[]> = {
 		a: ["@b"],
