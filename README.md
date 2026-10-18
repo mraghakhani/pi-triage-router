@@ -596,6 +596,15 @@ mtime-reloaded on the next route). Editable from the menu:
   `openrouter`/`litellm`, model id, timeout, attempts). If the config has no
   `jev` section yet, the menu offers to write one; `jev/auto` registers at
   extension load, so it appears in `/models` after a restart.
+  Provider and model edits are **validated before saving**: credentials
+  (env var or Pi auth file) and the model id's existence on the provider
+  (OpenRouter public catalog, or the LiteLLM proxy's model list via its
+  auth-file `baseUrl`). Definite failures deny the edit with the reason; an
+  unreachable provider (offline, proxy down) saves the edit with an
+  "unverified" warning instead of locking you out.
+  The same validation runs at session startup on the saved `jev` section and
+  prints problems as warnings (`triage-router: warning: ...`), including
+  "could not connect to provider ..." when the provider is unreachable.
 - **Enable/disable a model** - keep the entry in the config without ever
   routing to it.
 

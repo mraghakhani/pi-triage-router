@@ -42,6 +42,7 @@ import {
 	type ScoringConfig,
 } from "./triage-router-lib/triage-router-benchmarks.ts";
 import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
+import { checkRemoteClassifier, type RemoteSectionLike } from "./triage-router-lib/triage-router-validation.ts";
 import {
 	costSummary,
 	cacheSummary,
@@ -397,7 +398,7 @@ function validateModelEntry(raw: unknown, index: number, problems: string[]): Mo
 }
 
 /** Shared classifier default; timeoutMs differs by call site (laya budget vs jev's own 5000). */
-function defaultClassifier(timeoutMs: number): ClassifierConfig {
+export function defaultClassifier(timeoutMs: number): ClassifierConfig {
 	return {
 		provider: "local",
 		model: "typesafe/jev-1.13",
@@ -2026,9 +2027,41 @@ async function classifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save:
 	}
 }
 
+/** Validate a pending jev provider+model change before saving it.
+ * Denies definite failures (no credentials, model confirmed absent) with the
+ * check message; saves with a warning when the provider is unreachable
+ * (network errors never lock an offline laptop out of configuring). */
+async function validatedJevSave(
+	ctx: ExtensionContext,
+	save: MenuSave,
+	jev: ClassifierConfig | null,
+	patch: Record<string, unknown>,
+	next: { provider: string; model: string },
+	note: string,
+): Promise<void> {
+	ctx.ui.notify(`Validating ${next.provider}/${next.model}...`, "info");
+	const base = jev ?? { ...defaultClassifier(5000), provider: "openrouter" };
+	const section: RemoteSectionLike = {
+		provider: next.provider,
+		model: next.model,
+		apiKeyEnv: base.apiKeyEnv,
+		authFile: base.authFile,
+		proxyUrl: base.proxyUrl,
+	};
+	const check = await checkRemoteClassifier(section, "jev");
+	if (check.level === "problem") {
+		ctx.ui.notify(check.message, "error");
+		return;
+	}
+	await save(patch, note);
+	if (check.level === "warn") ctx.ui.notify(check.message, "warning");
+}
+
 /** Edits the jev classifier section: backs jev/auto (remote-only, openrouter or
  * litellm). When unconfigured, offers to write a full jev section - jev/auto
- * registers at extension load, so a restart is needed for it to appear. */
+ * registers at extension load, so a restart is needed for it to appear.
+ * Provider and model edits are validated (credentials + model existence on
+ * the provider) and denied when the check fails. */
 async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
 	for (;;) {
 		const jev = getConfig().jev;
@@ -2040,8 +2073,12 @@ async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, sa
 			const model = await ctx.ui.input("Jev model id (e.g. typesafe/jev-1.13)", "typesafe/jev-1.13");
 			const trimmed = model?.trim();
 			if (!trimmed) continue;
-			await save(
+			await validatedJevSave(
+				ctx,
+				save,
+				null,
 				{ jev: { provider, model: trimmed } },
+				{ provider, model: trimmed },
 				`jev = ${provider}/${trimmed} saved - jev/auto appears in /models after restart`,
 			);
 			continue;
@@ -2058,12 +2095,13 @@ async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, sa
 			// No "local": the jev entry is the remote backend by definition.
 			const provider = await ctx.ui.select("Jev provider", ["openrouter", "litellm"]);
 			if (!provider) continue;
-			await save({ jev: { provider } }, `jev.provider = ${provider} saved`);
+			// The unchanged model id must exist on the new provider too.
+			await validatedJevSave(ctx, save, jev, { jev: { provider } }, { provider, model: jev.model }, `jev.provider = ${provider} saved`);
 		} else if (pick.startsWith("Model id")) {
 			const model = await ctx.ui.input("Jev model id (e.g. typesafe/jev-1.13)", jev.model);
 			const trimmed = model?.trim();
 			if (!trimmed) continue;
-			await save({ jev: { model: trimmed } }, `jev.model = ${trimmed} saved`);
+			await validatedJevSave(ctx, save, jev, { jev: { model: trimmed } }, { provider: jev.provider, model: trimmed }, `jev.model = ${trimmed} saved`);
 		} else if (pick.startsWith("Timeout ms")) {
 			const timeoutMs = await promptTimeoutMs(ctx, jev.timeoutMs);
 			if (timeoutMs != null) await save({ jev: { timeoutMs } }, `jev.timeoutMs = ${timeoutMs} saved`);
@@ -2191,6 +2229,15 @@ export default function (pi: ExtensionAPI) {
 				return handleRequest(request, ctx, loadConfig(), "jev");
 			},
 		});
+		// Startup validation of the jev backend (non-blocking, like the price
+		// refresh): warns when credentials are missing, the model id is not on
+		// the provider, or the provider cannot be reached.
+		const jev = loadConfig().jev;
+		if (jev) {
+			void checkRemoteClassifier(jev, "jev").then((check) => {
+				if (check.level !== "ok") console.warn(`${LOG_PREFIX} warning: ${check.message}`);
+			});
+		}
 	}
 	// /triage dashboard: interactive menu in the TUI (no chat output);
 	// JSON/print modes have no dialogs and fall back to the Markdown report.
