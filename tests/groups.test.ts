@@ -431,15 +431,15 @@ test("dashboard: Config section shows the active group with ref count, or none",
 	});
 	const report = formatDashboard(withGroup);
 	assert.ok(
-		report.includes('- Groups: active "economy" (2 refs) · default none (default model, then cheapest)'),
+		report.includes('- Groups: active "economy" (2 refs) · default none'),
 		"merged group line present with active count",
 	);
 
 	const without = testConfig();
 	const plain = formatDashboard(without);
 	assert.ok(
-		plain.includes("- Groups: active none (full catalog) · default none (default model, then cheapest)"),
-		"unset merged line present",
+		plain.includes("- Groups: active none · default none"),
+		"unset merged line stays short (no wrap on 80-col terminals)",
 	);
 });
 
@@ -450,7 +450,7 @@ test("dashboard: Config section shows the default group (/compact pool), or none
 	});
 	const report = formatDashboard(withDefault);
 	assert.ok(
-		report.includes('- Groups: active none (full catalog) · default "economy" (1 ref)'),
+		report.includes('- Groups: active none · default "economy" (1 ref)'),
 		"merged group line present with default count",
 	);
 

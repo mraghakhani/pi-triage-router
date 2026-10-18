@@ -228,8 +228,11 @@ function configSection(config: RouterConfig): string {
 			: "- Jev backend: not configured",
 	);
 	lines.push(`- Fallback: ${config.fallback}`);
+	// Both labels use the short "none" when unset: the descriptive fallbacks
+	// ("full catalog", "default model, then cheapest") made the merged line
+	// 82 chars and wrapped on 80-col terminals. Detail lives in the README.
 	lines.push(
-		`- Groups: active ${activeGroupLabel(config)} · default ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`,
+		`- Groups: active ${groupLabel(config, "activeGroup", "none")} · default ${groupLabel(config, "defaultGroup", "none")}`,
 	);
 	lines.push(`- Override: ${config.override ?? "none"}`);
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
