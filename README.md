@@ -163,6 +163,11 @@ request, then recent turns, then summary:
   outgrow their window are re-classified.
 - **Budget**: `budget`-tagged work never pays above the cheapest eligible
   model.
+- **Direct requests** (`reason: "direct"` - `/compact` summaries,
+  extension calls outside the agent loop): no classification; the pick is
+  the cheapest model of `defaultGroup` when configured, else the
+  `default` model, else the cheapest eligible. A `defaultGroup` with no
+  eligible models degrades to the full set (logged once), never to an error.
 - Empty/zero/all-invalid probabilities (Laya unavailable, timeout, garbage)
   count as **no signal** -> fallback policy. Laya's self-reported confidence
   is logged but never trusted for decisions.

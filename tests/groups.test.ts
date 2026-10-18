@@ -338,6 +338,62 @@ test("route(): a user turn after a group switch re-classifies within the group",
 });
 
 // ---------------------------------------------------------------------------
+// direct requests (/compact and other out-of-loop calls)
+// ---------------------------------------------------------------------------
+
+test("direct picks the cheapest model of defaultGroup when configured", async () => {
+	router.setLayaForTests(mockClassifier({ model: {}, complexity: {}, category: {} }));
+	const config = testConfig({
+		defaultGroup: "economy",
+		groups: {
+			economy: [
+				"litellm/deepseek/deepseek-v4-flash",
+				"litellm/qwen/qwen3.8-max", // expensive decoy in the same group
+				"litellm/z-ai/glm-5.3", // cheaper than qwen but out of group
+			],
+		},
+	});
+	router.setConfigForTests(config);
+	const route = await router.handleRequest(
+		routeRequest([userMsg("compaction summary")], undefined, "direct") as never,
+		makeCtx(null) as never,
+		config,
+		"local" as never,
+	);
+	assert.equal(route.model.id, "deepseek/deepseek-v4-flash", "cheapest INSIDE defaultGroup");
+});
+
+test("direct without defaultGroup still prefers the configured default model", async () => {
+	router.setLayaForTests(mockClassifier({ model: {}, complexity: {}, category: {} }));
+	const config = testConfig({ default: "litellm/z-ai/glm-5.3" }); // not the cheapest model
+	router.setConfigForTests(config);
+	const route = await router.handleRequest(
+		routeRequest([userMsg("compaction summary")], undefined, "direct") as never,
+		makeCtx(null) as never,
+		config,
+		"local" as never,
+	);
+	assert.equal(route.model.id, "z-ai/glm-5.3", "default wins when defaultGroup is absent");
+});
+
+test("direct degrades gracefully when defaultGroup has no eligible models", async () => {
+	router.setLayaForTests(mockClassifier({ model: {}, complexity: {}, category: {} }));
+	const config = testConfig({
+		defaultGroup: "dead",
+		groups: { dead: ["litellm/ghost/model"] },
+		default: "litellm/deepseek/deepseek-v4-flash",
+	});
+	router.setConfigForTests(config);
+	const route = await router.handleRequest(
+		routeRequest([userMsg("compaction summary")], undefined, "direct") as never,
+		makeCtx(null) as never,
+		config,
+		"local" as never,
+	);
+	assert.equal(route.model.id, "deepseek/deepseek-v4-flash", "dead defaultGroup falls back to default");
+});
+
+// ---------------------------------------------------------------------------
 // dashboard
 // ---------------------------------------------------------------------------
 

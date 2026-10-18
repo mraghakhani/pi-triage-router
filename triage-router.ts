@@ -1430,6 +1430,25 @@ export function eligibleModels(
 	return windowEligible(pool, registry, requiredTokens);
 }
 
+/** The pool a `direct` request (compaction summaries, extension calls)
+ * picks from: the models of `defaultGroup` when one is configured (in the
+ * group's fallback order), else the present models so the caller's
+ * `default`-then-cheapest preference applies. Never throws: a group with no
+ * eligible models degrades to the full present set. */
+function directModels(config: RouterConfig, present: readonly ModelEntry[]): ModelEntry[] {
+	const group = config.defaultGroup ? groupComposites(config, config.defaultGroup) : null;
+	if (!group) return [...present];
+	const pool = filterByComposites(present, group);
+	if (pool.length === 0) {
+		warnOnce(
+			`direct:${config.defaultGroup}`,
+			`defaultGroup "${config.defaultGroup}" has no eligible models for direct requests; using the full set`,
+		);
+		return [...present];
+	}
+	return pool;
+}
+
 function composite(entry: ModelEntry): string {
 	return `${entry.provider}/${entry.id}`;
 }
@@ -2498,9 +2517,14 @@ export async function handleRequest(
 		console.error(`${LOG_PREFIX} configured "override" ${config.override} is not eligible; routing normally`);
 	}
 
-	// Direct requests (compaction summaries, extension calls): cheapest eligible.
+	// Direct requests (compaction summaries, extension calls): cheapest in
+	// defaultGroup, else cheapest in defaultGroup's fallback chain, else the
+	// configured default model, else cheapest eligible. Deterministic - no
+	// classification for a /compact summary; see decision rule "direct".
 	if (request.reason === "direct") {
-		const entry = fallbackEntry(config, eligible, priceResolver(ctx, config));
+		const priceIn = priceResolver(ctx, config);
+		const directPool = directModels(config, eligible);
+		const entry = fallbackEntry(config, directPool, priceIn);
 		logDecision(
 			{
 				entry,
