@@ -132,6 +132,17 @@ test("openrouter provider without credentials: explicit non-fatal startup proble
 	}
 });
 
+test("litellm classifier defaults to the LITELLM_API_KEY credential env; explicit apiKeyEnv wins", () => {
+	const litellm = router.validateConfig({ models: [], classifier: { provider: "litellm" } });
+	assert.equal(litellm.classifier.apiKeyEnv, "LITELLM_API_KEY", "a litellm classifier never inherits OPENROUTER_API_KEY");
+	const explicit = router.validateConfig({ models: [], classifier: { provider: "litellm", apiKeyEnv: "MY_CLASSIFIER_KEY" } });
+	assert.equal(explicit.classifier.apiKeyEnv, "MY_CLASSIFIER_KEY", "an explicit apiKeyEnv always wins");
+	const openrouter = router.validateConfig({ models: [], classifier: { provider: "openrouter" } });
+	assert.equal(openrouter.classifier.apiKeyEnv, "OPENROUTER_API_KEY", "openrouter default unchanged");
+	const local = router.validateConfig({ models: [] });
+	assert.equal(local.classifier.apiKeyEnv, "OPENROUTER_API_KEY", "local classifier default unchanged (env unused)");
+});
+
 test("openrouter provider with credentials validates clean", () => {
 	process.env.LAYA_TEST_KEY = "test-key-not-a-secret";
 	const config = router.validateConfig({

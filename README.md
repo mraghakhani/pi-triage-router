@@ -76,7 +76,9 @@ $EDITOR ~/.pi/agent/triage-router.json
 `laya/auto` is fully local and free - nothing to configure. `jev/auto` needs
 `LITELLM_API_KEY` in the environment, or a `litellm.key` entry in
 `~/.pi/agent/auth.json` (which also carries the litellm `baseUrl`). Benchmark
-refreshes work keyless against OpenRouter.
+refreshes work keyless against OpenRouter. Credential env vars follow the
+provider by default: `LITELLM_API_KEY` for a `litellm` classifier/jev section,
+`OPENROUTER_API_KEY` for `openrouter`; an explicit `apiKeyEnv` always wins.
 If your network needs a proxy, set `httpProxy` in `~/.pi/agent/settings.json`.
 
 ## How routing works
@@ -234,7 +236,7 @@ per (re)load and skipped; the router keeps working with the valid entries.
     "localPrompt": "...",    // role text for local Laya (default: ROLE_TEXT)
     "remotePrompt": "...",   // role text for the remote classifier (longer allowed)
     "failurePolicy": "deterministic", // or "error"
-    "apiKeyEnv": "OPENROUTER_API_KEY", // remote backends only; ignored for local
+    "apiKeyEnv": "OPENROUTER_API_KEY", // remote only; default follows the provider: OPENROUTER_API_KEY (openrouter) / LITELLM_API_KEY (litellm)
     "proxyUrl": null         // default: settings.json httpProxy, then env; "direct" = never
   },
 
@@ -247,7 +249,7 @@ per (re)load and skipped; the router keeps working with the valid entries.
     "retryDelayMs": 0,
     "maxInputTokens": 28672, // Jev state room: 32k (state+question) limit, 28k leaves 4k for questions
     "failurePolicy": "deterministic",
-    "apiKeyEnv": "LITELLM_API_KEY" // env first, then auth.json["litellm"].key; base URL from auth.json["litellm"]
+    "apiKeyEnv": "LITELLM_API_KEY" // default for litellm; env first, then auth.json["litellm"].key; base URL from auth.json["litellm"]
   },
 
   "benchmarks": {            // OpenRouter benchmark cache
@@ -603,7 +605,7 @@ mtime-reloaded on the next route). Editable from the menu:
   unreachable provider (offline, proxy down) saves the edit with an
   "unverified" warning instead of locking you out.
   The same validation runs at session startup on the saved `jev` section and
-  prints problems as warnings (`triage-router: warning: ...`), including
+  prints problems as warnings (`[pi-triage-router] warning: ...`), including
   "could not connect to provider ..." when the provider is unreachable.
 - **Enable/disable a model** - keep the entry in the config without ever
   routing to it.

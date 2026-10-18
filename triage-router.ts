@@ -416,6 +416,14 @@ export function defaultClassifier(timeoutMs: number): ClassifierConfig {
 	};
 }
 
+/** Conventional credential env var per remote provider. Only a default: an
+ * explicit `apiKeyEnv` in the section always wins (applyClassifierSection).
+ * Kept provider-aware so a litellm section never inherits OPENROUTER_API_KEY
+ * and sends OpenRouter credentials to the LiteLLM proxy. */
+export function defaultApiKeyEnv(provider: string): string {
+	return provider === "litellm" ? "LITELLM_API_KEY" : "OPENROUTER_API_KEY";
+}
+
 /** Benchmark cache defaults (shared by the initial literal and the mid-validation rebuild). */
 function defaultBenchmarks(): BenchmarkConfig {
 	return {
@@ -578,6 +586,9 @@ export function validateConfig(raw: unknown): RouterConfig {
 		if (c.apiKeyEnv !== undefined) {
 			if (typeof c.apiKeyEnv === "string" && c.apiKeyEnv.trim() !== "") target.apiKeyEnv = c.apiKeyEnv;
 			else problems.push(`"${label}.apiKeyEnv" must be a non-empty string`);
+		} else if (target.provider !== "local") {
+			// Provider-aware credential default; an explicit value above wins.
+			target.apiKeyEnv = defaultApiKeyEnv(target.provider);
 		}
 		if (c.proxyUrl !== undefined) {
 			if (c.proxyUrl === null || (typeof c.proxyUrl === "string" && c.proxyUrl.trim() !== "")) {
@@ -2044,7 +2055,9 @@ async function validatedJevSave(
 	const section: RemoteSectionLike = {
 		provider: next.provider,
 		model: next.model,
-		apiKeyEnv: base.apiKeyEnv,
+		// Fresh setup: the provider's conventional env var. An existing jev
+		// section carries its (validated) apiKeyEnv; switching providers keeps it.
+		apiKeyEnv: jev ? jev.apiKeyEnv : defaultApiKeyEnv(next.provider),
 		authFile: base.authFile,
 		proxyUrl: base.proxyUrl,
 	};

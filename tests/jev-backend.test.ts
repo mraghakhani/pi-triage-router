@@ -111,6 +111,17 @@ test("resolveApiKey: env wins, auth file fills in, missing stays null", () => {
 	delete process.env.LITELLM_API_KEY;
 	assert.ok(hasApiKey("LITELLM_API_KEY", "litellm", AUTH_FILE));
 	assert.ok(!hasApiKey("LITELLM_API_KEY", "litellm", NO_AUTH));
+	// Regression: a litellm section must not pick up OPENROUTER_API_KEY and
+	// leak that credential to the LiteLLM proxy. Only the env var named by
+	// apiKeyEnv (the litellm default here) is consulted.
+	process.env.OPENROUTER_API_KEY = "openrouter-key-not-a-secret";
+	assert.equal(
+		resolveApiKey("LITELLM_API_KEY", "litellm", AUTH_FILE),
+		"tmp-litellm-key",
+		"OPENROUTER_API_KEY in the environment must not shadow the litellm auth entry",
+	);
+	assert.equal(resolveApiKey("LITELLM_API_KEY", "litellm", NO_AUTH), null);
+	delete process.env.OPENROUTER_API_KEY;
 });
 
 test("resolveBaseUrl: entry.baseUrl wins, env.<NAME>_BASE_URL falls back, missing stays null", () => {
@@ -172,6 +183,15 @@ test("jev section without credentials: explicit non-fatal startup problem mentio
 	setRuntimePathsForTests({ authFile: AUTH_FILE });
 	const okConfig = router.validateConfig({ models: [], jev: { provider: "litellm" } });
 	assert.ok(!okConfig.problems.some((p) => p.startsWith("jev provider")));
+});
+
+test("jev credential env follows the provider; explicit apiKeyEnv wins", () => {
+	const litellm = router.validateConfig({ models: [], jev: { provider: "litellm" } });
+	assert.equal(litellm.jev?.apiKeyEnv, "LITELLM_API_KEY", "a litellm jev section never inherits OPENROUTER_API_KEY");
+	const explicit = router.validateConfig({ models: [], jev: { provider: "litellm", apiKeyEnv: "MY_JEV_KEY" } });
+	assert.equal(explicit.jev?.apiKeyEnv, "MY_JEV_KEY", "an explicit apiKeyEnv always wins");
+	const openrouter = router.validateConfig({ models: [], jev: {} });
+	assert.equal(openrouter.jev?.apiKeyEnv, "OPENROUTER_API_KEY", "openrouter default unchanged");
 });
 
 // ---------------------------------------------------------------------------
