@@ -81,6 +81,22 @@
   "default": "litellm/deepseek/deepseek-v4-flash",
   "override": null,
   "fallback": "cheapest",
+  "groups": {
+    "all": ["*"],
+    "economy": [
+      "litellm/deepseek/deepseek-v4-flash",
+      "litellm/z-ai/glm-5.3-flash"
+    ],
+    "standard": [
+      "litellm/z-ai/glm-5.3",
+      "litellm/deepseek/deepseek-v4-pro",
+      "litellm/xiaomi/mimo-v2.6-pro"
+    ],
+    "coding": ["@standard", "litellm/qwen/qwen3.8-max"],
+    "all-except-qwen": ["*", "-litellm/qwen/qwen3.8-max"]
+  },
+  "activeGroup": null,
+  "defaultGroup": null,
   "classifier": {
     "provider": "local",
     "timeoutMs": 5000,

@@ -222,6 +222,14 @@ per (re)load and skipped; the router keeps working with the valid entries.
   "default": null,           // "provider/id": preferred fallback model
   "override": null,          // "provider/id": manual override while set
   "fallback": "cheapest",    // or "strongest"
+  "groups": {              // named model subsets ("saved filters"; optional)
+    "all": ["*"],           // "*" = every catalog model
+    "economy": ["litellm/deepseek/deepseek-v4-flash"],
+    "coding": ["@economy", "litellm/qwen/qwen3.8-max"],  // "@group" includes another group
+    "all-except-qwen": ["*", "-litellm/qwen/qwen3.8-max"] // "-model" excludes
+  },
+  "activeGroup": null,      // group to filter routing to; null = full catalog
+  "defaultGroup": null,     // group to try when the active group has no eligible model
   "cacheDir": null,          // ONNX weight cache; default ~/.cache/receptron-laya
   "contextBudgetChars": 1800, // total context text sent to Laya
   "recentTurns": 4,          // short turns included verbatim-ish
@@ -284,6 +292,57 @@ old auto-appended price line sat last in each criterion and was the first
 casualty of head truncation. Price is handled by deterministic rules instead:
 `budget`-tagged work -> cheapest eligible, escalation -> strongest eligible,
 no-signal fallback -> cheapest/strongest by `priceIn`.
+
+## Model groups (`groups` section, optional)
+
+Groups are **named model subsets** - saved filters over the catalog. When
+`activeGroup` names one, classification and every deterministic rule
+(escalation, budget, scoring, fallback) operate on that group's models only:
+**the group is the universe**. The classifier questions themselves are
+unchanged - only fewer models are sent as criteria.
+
+```jsonc
+{
+  "groups": {
+    "all": ["*"],
+    "economy": ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"],
+    "coding": ["@economy", "litellm/qwen/qwen3.8-max"],
+    "all-except-qwen": ["*", "-litellm/qwen/qwen3.8-max"]
+  },
+  "activeGroup": "economy",
+  "defaultGroup": "all-except-qwen"
+}
+```
+
+Refs inside a group list: `"provider/id"` explicit model, `"*"` every
+catalog model, `"@group"` include another group's members (recursive;
+unknown names and cycles are validation problems), `"-provider/id"` exclude
+a model (applied last; a no-op when it was never included). Order does not
+matter; the result is a deduplicated set. One model may live in many groups.
+
+Rules:
+
+- **The group is the universe.** Escalation picks the strongest model *in
+  the group*; budget work picks the cheapest *in the group*; benchmark
+  scoring and fallback run across the group's models only.
+- **Manual override always wins**, even when the override model is outside
+  the active group - the same for a session's sticky model, which survives a
+  mid-session group switch until the next `reason: "user"` turn
+  re-classifies within the new group.
+- **Empty-group fallback chain**: when no model in the active group is
+  eligible (disabled, absent from the registry, window too small), routing
+  tries `defaultGroup`, then the `default` model, each step warned on stderr
+  (`warned once per process`); if none rescues the route, the usual
+  no-eligible-models error surfaces - nothing silently escapes the filter.
+- **Unknown `activeGroup` degrades to the full catalog** with a warning
+  (a misspelled name never breaks routing).
+- **Validation problems** (unknown model refs, unknown `@group` names,
+  circular references) are reported at load; bad groups never resolve to the
+  wrong catalog subset silently.
+
+The `/triage` dashboard's Config section shows the active group (name + ref
+count) or `none (full catalog)`. A complete, loadable reference lives in
+`triage-router.sample.json`.
 
 ## Classifier backends (`classifier` section)
 

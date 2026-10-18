@@ -44,6 +44,12 @@ import {
 import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
 import { checkRemoteClassifier, type RemoteSectionLike } from "./triage-router-lib/triage-router-validation.ts";
 import {
+	filterByComposites,
+	groupComposites,
+	validateGroupsSection,
+	warnOnce,
+} from "./triage-router-lib/triage-router-groups.ts";
+import {
 	costSummary,
 	cacheSummary,
 	configSummary,
@@ -198,6 +204,14 @@ export interface RouterConfig {
 	override?: string;
 	/** Fallback policy when Laya fails or is outvoted: "cheapest" (first eligible entry) or "strongest" (last eligible). Default "cheapest". */
 	fallback: "cheapest" | "strongest";
+	/** Named model groups ("saved filters"), each a list of refs:
+	 * "provider/id" explicit, "*" all catalog models, "@group" include
+	 * another group, "-provider/id" exclude. Optional. */
+	groups: Record<string, string[]>;
+	/** The group classification and routing are filtered to. null = full catalog. */
+	activeGroup: string | null;
+	/** Group to try when the active group has no eligible model. Optional. */
+	defaultGroup: string | null;
 	/** Override for the ONNX weight cache directory. Default: ~/.cache/receptron-laya. */
 	cacheDir?: string | null;
 	/** Total character budget for the context sections (recent turns + summary) sent to Laya.
@@ -311,6 +325,9 @@ const KNOWN_CONFIG_KEYS = new Set([
 	"default",
 	"override",
 	"fallback",
+	"groups",
+	"activeGroup",
+	"defaultGroup",
 	"cacheDir",
 	"contextBudgetChars",
 	"recentTurns",
@@ -473,6 +490,9 @@ export function validateConfig(raw: unknown): RouterConfig {
 	const config: RouterConfig = {
 		models: DEFAULT_MODELS,
 		fallback: obj.fallback === "strongest" ? "strongest" : "cheapest",
+		groups: {},
+		activeGroup: null,
+		defaultGroup: null,
 		contextBudgetChars: 1800,
 		recentTurns: 4,
 		layaTimeoutMs: 5000,
@@ -804,6 +824,29 @@ export function validateConfig(raw: unknown): RouterConfig {
 	} else {
 		problems.push('"models" missing or not an array; using defaults');
 	}
+
+	// --- named model groups ("saved filters"; optional) ---
+	// Parsed after models: refs expand against the final catalog, and
+	// unknown/circular refs become load problems, never silent wrong sets.
+	const catalog = config.models.map((entry) => `${entry.provider}/${entry.id}`);
+	config.groups = validateGroupsSection(obj.groups, catalog, problems) ?? {};
+	for (const [key, target] of [
+		["activeGroup", "active"],
+		["defaultGroup", "default"],
+	] as const) {
+		const value = (obj as Record<string, unknown>)[key];
+		if (value === undefined || value === null) continue;
+		if (typeof value !== "string" || value.trim() === "") {
+			problems.push(`"${key}" must be a non-empty string or null; ignoring`);
+		} else if (!config.groups[value]) {
+			// Warn + ignore at load: routing falls back to the full catalog
+			// (decision #7) instead of breaking the whole config.
+			problems.push(`"${key}" names no defined group ("${value}"); group filtering off`);
+		} else {
+			config[key] = value;
+		}
+	}
+
 	return config;
 }
 
@@ -1283,18 +1326,72 @@ export interface RegistryLike {
 	find(provider: string, id: string): RegistryModel | undefined;
 }
 
-/** Models that are enabled, valid, and actually present in the live registry.
- * With `requiredTokens`, also excludes models whose context window cannot hold
- * the upcoming request (window unknown = kept; never rejected on fabricated limits). */
-export function eligibleModels(
-	config: RouterConfig,
+/** Models that are enabled and actually present in the live registry,
+ * before any group filtering. */
+export function presentModels(config: RouterConfig, registry: RegistryLike): ModelEntry[] {
+	return config.models.filter((entry) => entry.enabled !== false && registry.find(entry.provider, entry.id));
+}
+
+/** Apply the active-group filter ("saved filters") with the fallback chain:
+ * activeGroup -> defaultGroup -> `default` model -> empty (the caller's
+ * no-eligible-models error). The group is the universe: escalation, budget,
+ * scoring, and fallback all operate on its models only. An unknown group
+ * name degrades to the full catalog with a warning (warned once per process). */
+function applyActiveGroup(config: RouterConfig, present: ModelEntry[]): ModelEntry[] {
+	const active = config.activeGroup;
+	if (active == null) return present;
+	if (groupComposites(config, active) == null) {
+		// Unknown name (only reachable when a config bypassed validation):
+		// warn + ignore - the full catalog stays routable.
+		warnOnce(`unknown:${active}`, `active group "${active}" is not defined; group filtering off`);
+		return present;
+	}
+	const filter = (name: string): ModelEntry[] => {
+		const composites = groupComposites(config, name);
+		if (composites == null) return [];
+		return filterByComposites(present, composites);
+	};
+	let pool = filter(active);
+	if (pool.length === 0) {
+		warnOnce(
+			`group:${active}`,
+			`group "${active}" has no eligible models${config.defaultGroup ? `; trying defaultGroup "${config.defaultGroup}"` : ""}`,
+		);
+	}
+	if (pool.length === 0 && config.defaultGroup) {
+		pool = filter(config.defaultGroup);
+		if (pool.length > 0) {
+			warnOnce(
+				`defaultGroup:${config.defaultGroup}`,
+				`group "${active}" empty; using defaultGroup "${config.defaultGroup}" (${pool.length} model${pool.length === 1 ? "" : "s"})`,
+			);
+			return pool;
+		}
+	}
+	if (pool.length === 0 && config.defaultModel) {
+		const match = present.find((entry) => composite(entry) === config.defaultModel);
+		if (match) {
+			warnOnce(
+				`default:${config.defaultModel}`,
+				`group "${active}" and defaultGroup empty; using default model ${config.defaultModel}`,
+			);
+			return [match];
+		}
+	}
+	return pool;
+}
+
+/** Filter a model list by context-window fit (window unknown = kept; never
+ * rejected on fabricated limits). When nothing fits, everything is kept
+ * (logged) - routing degrades rather than throwing. */
+export function windowEligible(
+	models: readonly ModelEntry[],
 	registry: RegistryLike,
-	requiredTokens: number | null = null,
+	requiredTokens: number | null,
 ): ModelEntry[] {
-	const present = config.models.filter((entry) => entry.enabled !== false && registry.find(entry.provider, entry.id));
-	if (requiredTokens == null) return present;
+	if (requiredTokens == null) return [...models];
 	const excluded: string[] = [];
-	const fits = present.filter((entry) => {
+	const fits = models.filter((entry) => {
 		const win = registry.find(entry.provider, entry.id)?.contextWindow;
 		if (typeof win === "number" && win < requiredTokens) {
 			excluded.push(composite(entry));
@@ -1306,15 +1403,29 @@ export function eligibleModels(
 		console.error(
 			`${LOG_PREFIX} context window: every eligible model is below ~${requiredTokens} tokens; keeping all`,
 		);
-		return present;
+		return [...models];
 	}
 	if (excluded.length > 0) {
 		const plural = excluded.length === 1 ? "" : "s";
 		console.error(
-			`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
+				`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
 		);
 	}
 	return fits;
+}
+
+/** Models that are enabled, valid, present in the live registry, and inside
+ * the active group (when one is set). With `requiredTokens`, also excludes
+ * models whose context window cannot hold the upcoming request. */
+export function eligibleModels(
+	config: RouterConfig,
+	registry: RegistryLike,
+	requiredTokens: number | null = null,
+): ModelEntry[] {
+	const present = presentModels(config, registry);
+	const pool = applyActiveGroup(config, present);
+	if (pool.length === 0) return pool;
+	return windowEligible(pool, registry, requiredTokens);
 }
 
 function composite(entry: ModelEntry): string {
@@ -2337,10 +2448,14 @@ export async function handleRequest(
 			? null
 			: contextTokens + Math.ceil(lastUserText(request.messages).length / 4) + OUTPUT_RESERVE_TOKENS;
 	const eligible = eligibleModels(config, ctx.modelRegistry, requiredTokens);
+	// Present-but-not-group-filtered set: manual override and the sticky model
+	// win even when the active group excludes them (override = user command,
+	// sticky = conversation continuity; both outrank the group filter).
+	const present = windowEligible(presentModels(config, ctx.modelRegistry), ctx.modelRegistry, requiredTokens);
 
 	// Manual override: validated, takes precedence, visible in diagnostics.
 	if (config.override) {
-		const entry = eligible.find((e) => composite(e) === config.override);
+		const entry = present.find((e) => composite(e) === config.override);
 		if (entry) {
 			const state = { model: composite(entry), summary: request.state?.summary ?? "" };
 			logDecision(
@@ -2387,7 +2502,9 @@ export async function handleRequest(
 	// Continuations and retries stay on the model that handled the turn
 	// (bounded: no re-escalation loops), unless it is no longer eligible.
 	if (request.reason !== "user" && request.state) {
-		const sticky = eligible.find((e) => composite(e) === request.state!.model);
+		// Sticky lookup ignores the active group (decision: sticky wins until
+		// the next user turn); a new user turn re-classifies within the group.
+		const sticky = present.find((e) => composite(e) === request.state!.model);
 		if (sticky) {
 			logDecision(
 				{

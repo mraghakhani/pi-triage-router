@@ -197,6 +197,15 @@ function cacheSection(config: RouterConfig): string {
 	return lines.join("\n");
 }
 
+/** One-line active-group label for the Config section: name + member count
+ * when a group is active, "none (full catalog)" otherwise. */
+function activeGroupLabel(config: RouterConfig): string {
+	const name = config.activeGroup;
+	if (!name) return "none (full catalog)";
+	const refs = config.groups?.[name];
+	return refs ? `"${name}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${name}"`;
+}
+
 function configSection(config: RouterConfig): string {
 	const lines = ["## Config", ""];
 	const classifier = config.classifier;
@@ -210,6 +219,7 @@ function configSection(config: RouterConfig): string {
 			: "- Jev backend: not configured",
 	);
 	lines.push(`- Fallback: ${config.fallback}`);
+	lines.push(`- Active group: ${activeGroupLabel(config)}`);
 	lines.push(`- Override: ${config.override ?? "none"}`);
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
 	lines.push("");
