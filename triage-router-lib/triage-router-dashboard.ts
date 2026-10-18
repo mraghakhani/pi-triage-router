@@ -228,8 +228,9 @@ function configSection(config: RouterConfig): string {
 			: "- Jev backend: not configured",
 	);
 	lines.push(`- Fallback: ${config.fallback}`);
-	lines.push(`- Active group: ${activeGroupLabel(config)}`);
-	lines.push(`- Default group (/compact pool): ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`);
+	lines.push(
+		`- Groups: active ${activeGroupLabel(config)} · default ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`,
+	);
 	lines.push(`- Override: ${config.override ?? "none"}`);
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
 	lines.push("");

@@ -2287,7 +2287,7 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		const edit = await ctx.ui.select("Edit config", [
 			`Manual override — ${config.override ?? "none"}`,
 			`Active group — ${activeGroupLabel(config)}`,
-			`Default group — ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`,
+			`Default group — ${groupLabel(config, "defaultGroup", "none")}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,

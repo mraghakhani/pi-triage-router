@@ -430,11 +430,17 @@ test("dashboard: Config section shows the active group with ref count, or none",
 		activeGroup: "economy",
 	});
 	const report = formatDashboard(withGroup);
-	assert.ok(report.includes('- Active group: "economy" (2 refs)'), "group line present with count");
+	assert.ok(
+		report.includes('- Groups: active "economy" (2 refs) · default none (default model, then cheapest)'),
+		"merged group line present with active count",
+	);
 
 	const without = testConfig();
 	const plain = formatDashboard(without);
-	assert.ok(plain.includes("- Active group: none (full catalog)"), "no-group line present when unset");
+	assert.ok(
+		plain.includes("- Groups: active none (full catalog) · default none (default model, then cheapest)"),
+		"unset merged line present",
+	);
 });
 
 test("dashboard: Config section shows the default group (/compact pool), or none", () => {
@@ -444,14 +450,18 @@ test("dashboard: Config section shows the default group (/compact pool), or none
 	});
 	const report = formatDashboard(withDefault);
 	assert.ok(
-		report.includes('- Default group (/compact pool): "economy" (1 ref)'),
-		"default-group line present with count",
+		report.includes('- Groups: active none (full catalog) · default "economy" (1 ref)'),
+		"merged group line present with default count",
 	);
 
-	const plain = formatDashboard(testConfig());
+	const both = testConfig({
+		groups: { economy: ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"] },
+		activeGroup: "economy",
+		defaultGroup: "economy",
+	});
 	assert.ok(
-		plain.includes("- Default group (/compact pool): none (default model, then cheapest)"),
-		"unset default-group line present",
+		formatDashboard(both).includes('- Groups: active "economy" (2 refs) · default "economy" (2 refs)'),
+		"both set renders both on one line",
 	);
 });
 
