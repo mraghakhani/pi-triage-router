@@ -197,15 +197,22 @@ function cacheSection(config: RouterConfig): string {
 	return lines.join("\n");
 }
 
-/** One-line active-group label for the Config section and the edit menu:
- * name + member count when a group is active, "none (full catalog)"
- * otherwise. */
-export function activeGroupLabel(config: RouterConfig): string {
-	const name = config.activeGroup;
-	if (!name) return "none (full catalog)";
+/** One-line group label for the Config section and the edit menu:
+ * name + ref count when the field names a defined group, the given
+ * fallback text when unset. (Also used for defaultGroup.) */
+export function groupLabel(config: RouterConfig, field: "activeGroup" | "defaultGroup", unsetText: string): string {
+	const name = config[field];
+	if (!name) return unsetText;
 	const refs = config.groups?.[name];
 	// Array.isArray: hand-built configs can hold anything on the prototype chain.
 	return Array.isArray(refs) ? `"${name}" (${refs.length} ref${refs.length === 1 ? "" : "s"})` : `"${name}"`;
+}
+
+/** One-line active-group label for the Config section and the edit menu:
+ * name + ref count when a group is active, "none (full catalog)"
+ * otherwise. */
+export function activeGroupLabel(config: RouterConfig): string {
+	return groupLabel(config, "activeGroup", "none (full catalog)");
 }
 
 function configSection(config: RouterConfig): string {
@@ -222,6 +229,7 @@ function configSection(config: RouterConfig): string {
 	);
 	lines.push(`- Fallback: ${config.fallback}`);
 	lines.push(`- Active group: ${activeGroupLabel(config)}`);
+	lines.push(`- Default group (/compact pool): ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`);
 	lines.push(`- Override: ${config.override ?? "none"}`);
 	lines.push(`- Scoring: ${config.scoring.enabled ? `enabled (${config.scoring.missingPolicy})` : "disabled"}`);
 	lines.push("");

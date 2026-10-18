@@ -655,6 +655,8 @@ mtime-reloaded on the next route). Editable from the menu:
 - **Active group** - switch the active model group (or clear it back to the
   full catalog). Only groups defined in the config file are offered; creating
   and editing groups themselves stays a config-file operation.
+- **Default group** - switch the group that drives `/compact` and
+  out-of-loop picks (or clear it back to `default` model, then cheapest).
 - **Fallback policy** - `cheapest` or `strongest`.
 - **Scoring** and **price auto-refresh** - enabled/disabled.
 - **Laya classifier** - the `classifier` section backing `laya/auto`: timeout

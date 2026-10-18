@@ -53,6 +53,7 @@ import {
 	costSummary,
 	cacheSummary,
 	activeGroupLabel,
+	groupLabel,
 	configSummary,
 	formatDashboard,
 	historyOptions,
@@ -2286,6 +2287,7 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 		const edit = await ctx.ui.select("Edit config", [
 			`Manual override — ${config.override ?? "none"}`,
 			`Active group — ${activeGroupLabel(config)}`,
+			`Default group — ${groupLabel(config, "defaultGroup", "none (default model, then cheapest)")}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
@@ -2317,6 +2319,20 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 			} else {
 				if (config.activeGroup === pick) continue;
 				await save({ activeGroup: pick }, `activeGroup = "${pick}" saved`);
+			}
+		} else if (edit.startsWith("Default group")) {
+			// defaultGroup drives /compact and out-of-loop picks, and rescues an
+			// empty activeGroup. (none) clears it: /compact then prefers the
+			// `default` model, then the cheapest present model.
+			const picks = ["(none — default model, then cheapest)", ...groupNames];
+			const pick = await ctx.ui.select("Default group (drives /compact picks)", picks);
+			if (!pick) continue;
+			if (pick === "(none — default model, then cheapest)") {
+				if (config.defaultGroup == null) continue;
+				await save({ defaultGroup: null }, "defaultGroup cleared");
+			} else {
+				if (config.defaultGroup === pick) continue;
+				await save({ defaultGroup: pick }, `defaultGroup = "${pick}" saved`);
 			}
 		} else if (edit.startsWith("Fallback policy")) {
 			const pick = await ctx.ui.select("Fallback policy", ["cheapest", "strongest"]);
@@ -2535,7 +2551,11 @@ export async function handleRequest(
 				complexity: "standard",
 				category: "question",
 				confidence: null,
-				notes: ["request outside agent loop"],
+				notes: [
+					config.defaultGroup
+						? `request outside agent loop (pool: defaultGroup "${config.defaultGroup}")`
+						: "request outside agent loop",
+				],
 				estimate: emptyEstimate(),
 			},
 			null,

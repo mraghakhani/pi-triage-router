@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as router from "../triage-router.ts";
 import { expandGroupRefs, filterByComposites } from "../triage-router-lib/triage-router-groups.ts";
-import { formatDashboard } from "../triage-router-lib/triage-router-dashboard.ts";
+import { formatDashboard, groupLabel } from "../triage-router-lib/triage-router-dashboard.ts";
 import {
 	ALL_KEYS,
 	makeCtx,
@@ -435,4 +435,32 @@ test("dashboard: Config section shows the active group with ref count, or none",
 	const without = testConfig();
 	const plain = formatDashboard(without);
 	assert.ok(plain.includes("- Active group: none (full catalog)"), "no-group line present when unset");
+});
+
+test("dashboard: Config section shows the default group (/compact pool), or none", () => {
+	const withDefault = testConfig({
+		groups: { economy: ["litellm/deepseek/deepseek-v4-flash"] },
+		defaultGroup: "economy",
+	});
+	const report = formatDashboard(withDefault);
+	assert.ok(
+		report.includes('- Default group (/compact pool): "economy" (1 ref)'),
+		"default-group line present with count",
+	);
+
+	const plain = formatDashboard(testConfig());
+	assert.ok(
+			plain.includes("- Default group (/compact pool): none (default model, then cheapest)"),
+			"unset default-group line present",
+	);
+});
+
+test("groupLabel: label is correct for both fields, unset uses the given text", () => {
+	const config = testConfig({
+		groups: { economy: ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"] },
+	});
+	assert.equal(groupLabel(config, "activeGroup", "nope"), "nope");
+	assert.equal(groupLabel(config, "defaultGroup", "fallback"), "fallback");
+	config.activeGroup = "economy";
+	assert.equal(groupLabel(config, "activeGroup", "nope"), '"economy" (2 refs)');
 });
