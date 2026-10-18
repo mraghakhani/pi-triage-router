@@ -450,8 +450,8 @@ test("dashboard: Config section shows the default group (/compact pool), or none
 
 	const plain = formatDashboard(testConfig());
 	assert.ok(
-			plain.includes("- Default group (/compact pool): none (default model, then cheapest)"),
-			"unset default-group line present",
+		plain.includes("- Default group (/compact pool): none (default model, then cheapest)"),
+		"unset default-group line present",
 	);
 });
 

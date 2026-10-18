@@ -2321,6 +2321,13 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 				await save({ activeGroup: pick }, `activeGroup = "${pick}" saved`);
 			}
 		} else if (edit.startsWith("Default group")) {
+			if (groupNames.length === 0) {
+				// Mirror of the Active group guard: no groups defined, nothing to
+				// pick from. (A stale defaultGroup cannot exist here: validation
+				// warns and ignores names not in "groups" on load.)
+				ctx.ui.notify("No groups defined in the config file (add a \"groups\" section first)", "info");
+				continue;
+			}
 			// defaultGroup drives /compact and out-of-loop picks, and rescues an
 			// empty activeGroup. (none) clears it: /compact then prefers the
 			// `default` model, then the cheapest present model.
