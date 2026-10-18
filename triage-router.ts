@@ -1431,10 +1431,11 @@ export function eligibleModels(
 }
 
 /** The pool a `direct` request (compaction summaries, extension calls)
- * picks from: the models of `defaultGroup` when one is configured (in the
- * group's fallback order), else the present models so the caller's
- * `default`-then-cheapest preference applies. Never throws: a group with no
- * eligible models degrades to the full present set. */
+ * picks from: the models of `defaultGroup` when one is configured, else the
+ * given models so the caller's `default`-then-cheapest preference applies.
+ * Callers pass the present-but-not-activeGroup-filtered set: the active
+ * group filters the chat loop, never compaction. Never throws: a group with
+ * no eligible models degrades to the full given set. */
 function directModels(config: RouterConfig, present: readonly ModelEntry[]): ModelEntry[] {
 	const group = config.defaultGroup ? groupComposites(config, config.defaultGroup) : null;
 	if (!group) return [...present];
@@ -2523,7 +2524,9 @@ export async function handleRequest(
 	// classification for a /compact summary; see decision rule "direct".
 	if (request.reason === "direct") {
 		const priceIn = priceResolver(ctx, config);
-		const directPool = directModels(config, eligible);
+		// present, not eligible: the active group filters the chat loop, not
+		// /compact - direct requests use defaultGroup/defaultModel per spec.
+		const directPool = directModels(config, present);
 		const entry = fallbackEntry(config, directPool, priceIn);
 		logDecision(
 			{

@@ -393,6 +393,33 @@ test("direct degrades gracefully when defaultGroup has no eligible models", asyn
 	assert.equal(route.model.id, "deepseek/deepseek-v4-flash", "dead defaultGroup falls back to default");
 });
 
+test("direct ignores activeGroup - it uses defaultGroup even when activeGroup excludes it", async () => {
+	// Regression: directModels received the activeGroup-filtered set, so an
+	// economy defaultGroup collapsed to empty and /compact picked the
+	// cheapest of premium instead of the cheapest of economy.
+	router.setLayaForTests(mockClassifier({ model: {}, complexity: {}, category: {} }));
+	const config = testConfig({
+		groups: {
+			premium: ["litellm/qwen/qwen3.8-max", "litellm/z-ai/glm-5.3"],
+			economy: ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"],
+		},
+		activeGroup: "premium",
+		defaultGroup: "economy",
+	});
+	router.setConfigForTests(config);
+	const route = await router.handleRequest(
+		routeRequest([userMsg("compaction summary")], undefined, "direct") as never,
+		makeCtx(null) as never,
+		config,
+		"local" as never,
+	);
+	assert.equal(
+		route.model.id,
+		"deepseek/deepseek-v4-flash",
+		"compact uses the cheapest of defaultGroup, never the active group's",
+	);
+});
+
 // ---------------------------------------------------------------------------
 // dashboard
 // ---------------------------------------------------------------------------
