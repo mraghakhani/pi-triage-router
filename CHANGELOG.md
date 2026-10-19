@@ -12,19 +12,17 @@ _2026-10-19 — [v0.5.0...HEAD](https://github.com/mraghakhani/pi-triage-router/
 - **menu:** validate group refs before saving them (6998bca)
 - **menu:** interactive groups management in /triage (5408ed8)
 
+### Documentation
+
+- **changelog:** generate CHANGELOG.md from git history (d380375)
+
+### Other
+
+- fix(menu)+tests: review follow-ups for groups menu and ref validation (348223a)
+
 ## v0.5.0
 
 _2026-10-19 — [v0.4.0...v0.5.0](https://github.com/mraghakhani/pi-triage-router/compare/v0.4.0...v0.5.0)_
-
-### Fixed
-
-- **tui:** /triage must post the report in TUI too, not only print mode (e61f0c6)
-- **dashboard:** history row wrapped past 100 chars - shorten time cell (ac778ad)
-- **dashboard:** merged Groups line must not wrap on 80-col terminals (348a635)
-- **menu:** Default group zero-groups guard + test indentation (4f98203)
-- **direct:** compact must not inherit the activeGroup filter (b6a98e2)
-- **menu:** polish Active group entry (e9b291e)
-- **groups:** harden ref resolution against prototype-chain names (1f13aab)
 
 ### Added
 
@@ -39,16 +37,19 @@ _2026-10-19 — [v0.4.0...v0.5.0](https://github.com/mraghakhani/pi-triage-route
 - **labels,dashboard:** shared unset label map + dashboard wrap audit (52c667b)
 - **dashboard,menu:** merge group lines, shorten menu default label (70e27b8)
 
+### Fixed
+
+- **tui:** /triage must post the report in TUI too, not only print mode (e61f0c6)
+- **dashboard:** history row wrapped past 100 chars - shorten time cell (ac778ad)
+- **dashboard:** merged Groups line must not wrap on 80-col terminals (348a635)
+- **menu:** Default group zero-groups guard + test indentation (4f98203)
+- **direct:** compact must not inherit the activeGroup filter (b6a98e2)
+- **menu:** polish Active group entry (e9b291e)
+- **groups:** harden ref resolution against prototype-chain names (1f13aab)
+
 ## v0.4.0
 
 _2026-10-18 — [v0.3.0...v0.4.0](https://github.com/mraghakhani/pi-triage-router/compare/v0.3.0...v0.4.0)_
-
-### Fixed
-
-- **triage:** the laya classifier provider is not editable from the menu (f38395a)
-- **classifier:** litellm sections no longer inherit OPENROUTER_API_KEY (0fc2b41)
-- **triage:** expose the jev classifier in the /triage edit menu (4adb5f4)
-- **triage:** harden config editing from deep review (bf51af5)
 
 ### Added
 
@@ -56,6 +57,13 @@ _2026-10-18 — [v0.3.0...v0.4.0](https://github.com/mraghakhani/pi-triage-route
 - **triage:** validate jev classifier edits and warn at startup (7a350f0)
 - **triage:** interactive /triage menu with live config editing (050718f)
 - **triage:** add /triage dashboard with session routing history and cost report (4c48a2d)
+
+### Fixed
+
+- **triage:** the laya classifier provider is not editable from the menu (f38395a)
+- **classifier:** litellm sections no longer inherit OPENROUTER_API_KEY (0fc2b41)
+- **triage:** expose the jev classifier in the /triage edit menu (4adb5f4)
+- **triage:** harden config editing from deep review (bf51af5)
 
 ## v0.3.0
 
@@ -100,6 +108,11 @@ _2026-10-13 — [v0.2.0...v0.2.1](https://github.com/mraghakhani/pi-triage-route
 
 _2026-10-12 — [v0.2.0](https://github.com/mraghakhani/pi-triage-router/releases/tag/v0.2.0)_
 
+### Changed
+
+- **proxy:** unify classifier and benchmark proxy resolution into one chain (c86467e)
+- **config:** extract default classifier/benchmarks/scoring helpers (c2076f6)
+
 ### Fixed
 
 - **benchmarks:** fall back to the Pi auth file's openrouter key when the env var is unset (62930df)
@@ -123,11 +136,8 @@ _2026-10-12 — [v0.2.0](https://github.com/mraghakhani/pi-triage-router/release
 - annotate remaining findings as fixed/deferred/not-a-bug (f7a0ddc)
 - retract B3 as false positive (cacheDir validation was correct) (16a7a8c)
 
-### Changed
-
-- **proxy:** unify classifier and benchmark proxy resolution into one chain (c86467e)
-- **config:** extract default classifier/benchmarks/scoring helpers (c2076f6)
-
 ### Other
 
+- fix install failure on linux/x64 by skipping onnxruntime's CUDA download (62bf4df)
 - correct the install paths to the git source directory (e35f94a)
+- pi-triage-router: extract the router as an installable pi package (903ed73)

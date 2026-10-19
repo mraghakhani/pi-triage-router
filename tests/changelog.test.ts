@@ -51,3 +51,9 @@ test("unknown type falls through to Other", () => {
 	const buckets = bucketsFor([c("abc1234", "wip: half-done thing")]);
 	assert.equal(buckets.get("Other").length, 1);
 });
+
+test("commitsBetween: empty range returns empty list (smoke)", () => {
+	// HEAD..HEAD is always empty; exercises the git invocation + line parser
+	// without depending on any particular history.
+	assert.deepEqual(commitsBetween("HEAD", "HEAD"), []);
+});

@@ -63,9 +63,8 @@ export function bucketsFor(commits) {
 }
 
 function renderSection(title, tag, prev, commits = commitsBetween(prev, tag)) {
-	const date = tag && tag !== "HEAD"
-		? run("git", ["log", "-1", "--format=%ad", "--date=short", tag])
-		: new Date().toISOString().slice(0, 10);
+	// Deterministic: always the ref's commit date (HEAD included), never wall clock.
+	const date = run("git", ["log", "-1", "--format=%ad", "--date=short", tag]);
 	const compareLink = prev
 		? `[${prev}...${tag}](${BASE_URL}/compare/${prev}...${tag})`
 		: `[${tag}](${BASE_URL}/releases/tag/${tag})`;
