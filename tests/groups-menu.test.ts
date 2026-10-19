@@ -120,3 +120,27 @@ test("groupRefsMenu delete keeps confirm=false a no-op", async () => {
 	const raw = JSON.parse(readFileSync(configPath, "utf8"));
 	assert.ok("econ" in raw.groups);
 });
+
+test("groupRefsMenu rejects an unknown-model ref with a warning, no write", async () => {
+	seedConfig({ groups: { econ: ["litellm/a/b"] }, models: [{ provider: "litellm", id: "a/b", description: "x" }] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	// Script: Add ref… -> "provider/nope" (rejected) -> Back.
+	const ctx = makeCtx(["Add ref…", "provider/nope", MENU_BACK]);
+	await groupRefsMenu(ctx, "econ", getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.deepEqual(raw.groups.econ, ["litellm/a/b"], "bad ref not persisted");
+	assert.ok(notifications.some((n) => n.message.includes("unknown model")), "warning notified");
+});
+
+test("groupRefsMenu accepts a valid ref after rejecting a bad one", async () => {
+	seedConfig({ groups: { econ: ["litellm/a/b"] }, models: [
+		{ provider: "litellm", id: "a/b", description: "x" },
+		{ provider: "litellm", id: "c/d", description: "y" },
+	] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	// Script: Add ref… -> bad (rejected) -> Add ref… -> good -> Back.
+	const ctx = makeCtx(["Add ref…", "provider/nope", "Add ref…", "litellm/c/d", MENU_BACK]);
+	await groupRefsMenu(ctx, "econ", getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.ok(raw.groups.econ.includes("litellm/c/d"), "valid ref added after rejection loop");
+});

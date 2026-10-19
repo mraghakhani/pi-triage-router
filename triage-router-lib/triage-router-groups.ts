@@ -28,6 +28,29 @@
  */
 import type { RouterConfig } from "../triage-router.ts";
 
+/**
+ * Problems a single new ref would introduce, evaluated against the current
+ * groups map and catalog. Only problems NOT already present in the group's
+ * existing refs are returned, so re-saving over a stale hand-edit stays quiet.
+ * Pure: never throws, never touches I/O.
+ */
+export function refProblems(
+	groups: Readonly<Record<string, readonly string[]>>,
+	name: string,
+	ref: string,
+	catalog: readonly Composite[],
+): string[] {
+	const existing = groups[name] ?? [];
+	const before: string[] = [];
+	expandGroupRefs(existing, groups, catalog, before);
+	const proposal: Record<string, string[]> = {};
+	for (const [k, v] of Object.entries(groups)) proposal[k] = [...v];
+	proposal[name] = [...existing, ref];
+	const after: string[] = [];
+	expandGroupRefs(proposal[name], proposal, catalog, after);
+	return after.filter((problem) => !before.includes(problem));
+}
+
 const LOG_PREFIX = "[pi-triage-router]";
 
 /** Composite model id ("provider/id"), the form refs and members use. */

@@ -46,6 +46,7 @@ import { checkRemoteClassifier, type RemoteSectionLike } from "./triage-router-l
 import {
 	filterByComposites,
 	groupComposites,
+	refProblems,
 	validateGroupsSection,
 	warnOnce,
 } from "./triage-router-lib/triage-router-groups.ts";
@@ -2331,6 +2332,15 @@ export async function groupRefsMenu(
 			if (!ref) continue;
 			if (refs.includes(ref)) {
 				ctx.ui.notify(`"${ref}" is already in group "${name}"`, "info");
+				continue;
+			}
+			// Validate before saving: refs that name no catalog model or no
+			// existing group (and new cycles such refs would form) are rejected
+			// here instead of silently resolving to nothing at route time.
+			const catalog = config.models.map((m) => `${m.provider}/${m.id}`);
+			const problems = refProblems(config.groups, name, ref, catalog);
+			if (problems.length > 0) {
+				ctx.ui.notify(problems.join(" · "), "warning");
 				continue;
 			}
 			await save({ groups: { [name]: [...refs, ref] } }, `group "${name}" ref "${ref}" added`);

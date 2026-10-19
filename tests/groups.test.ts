@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as router from "../triage-router.ts";
-import { expandGroupRefs, filterByComposites } from "../triage-router-lib/triage-router-groups.ts";
+import { expandGroupRefs, filterByComposites, refProblems } from "../triage-router-lib/triage-router-groups.ts";
 import { formatDashboard, groupLabel } from "../triage-router-lib/triage-router-dashboard.ts";
 import {
 	ALL_KEYS,
@@ -475,4 +475,46 @@ test("groupLabel: label is correct for both fields, unset defaults to short none
 	assert.equal(groupLabel(config, "activeGroup"), '"economy" (2 refs)');
 	// Explicit override for specialized labels (menu Active row).
 	assert.equal(groupLabel(config, "defaultGroup", "nope"), "nope");
+});
+// ---------------------------------------------------------------------------
+// refProblems: menu-time validation of a single new ref
+// ---------------------------------------------------------------------------
+
+const CAT = ["litellm/a/b", "openrouter/c/d"];
+
+test("refProblems: valid refs produce no problems", () => {
+	const groups = { g: ["*"] };
+	assert.deepEqual(refProblems(groups, "g", "litellm/a/b", CAT), []);
+	assert.deepEqual(refProblems(groups, "g", "openrouter/c/d", CAT), []);
+	assert.deepEqual(refProblems({ g: [], h: [] }, "g", "@h", CAT), []);
+});
+
+test("refProblems: unknown model and unknown group are flagged", () => {
+	const groups = { g: [] };
+	const unknownModel = refProblems(groups, "g", "provider/nope", CAT);
+	assert.ok(unknownModel.some((p) => p.includes("unknown model")));
+	const unknownGroup = refProblems(groups, "g", "@missing", CAT);
+	assert.ok(unknownGroup.some((p) => p.includes("unknown group")));
+});
+
+test("refProblems: a ref creating a cycle is flagged", () => {
+	// g -> @h and h -> @g already cycles at load; adding @g inside g is the
+	// new problem the pre-check must catch (self-reference).
+	const groups = { g: [] };
+	const problems = refProblems(groups, "g", "@g", CAT);
+	assert.ok(problems.some((p) => p.includes("circular")), "self-cycle flagged");
+});
+
+test("refProblems: pre-existing problems are not re-reported for a new valid ref", () => {
+	// g already references an unknown model (hand-edited file, warned at load);
+	// adding a valid ref must stay quiet.
+	const groups: Record<string, string[]> = { g: ["provider/nope"] };
+	const problems = refProblems(groups, "g", "litellm/a/b", CAT);
+	assert.deepEqual(problems, [], "baseline problems filtered out, only new ones reported");
+});
+
+test("refProblems: wildcard and exclusion refs never produce problems", () => {
+	const groups = { g: [] };
+	assert.deepEqual(refProblems(groups, "g", "*", CAT), []);
+	assert.deepEqual(refProblems(groups, "g", "-litellm/a/b", CAT), []);
 });
