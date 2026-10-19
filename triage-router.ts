@@ -2277,6 +2277,84 @@ async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, sa
 	}
 }
 
+/** Interactive editor for the "groups" section: pick a group to add/remove
+ * refs, create a group, or delete one. Group management is otherwise
+ * config-file-only; this menu is the single guided surface. */
+export async function groupsMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
+	for (;;) {
+		const config = getConfig();
+		const names = Object.keys(config.groups);
+		// Label -> name map: a group name may contain " (", so the raw pick
+		// cannot be parsed back to the name.
+		const byLabel = new Map(names.map((n) => [`${n} (${config.groups[n].length} refs)`, n]));
+		const pick = await ctx.ui.select("Groups", [...byLabel.keys(), "New group\u2026", MENU_BACK]);
+		if (!pick || pick === MENU_BACK) return;
+		if (pick === "New group\u2026") {
+			const name = (await ctx.ui.input("New group name", ""))?.trim();
+			if (!name) continue;
+			// Parity with validateGroupsSection: "__proto__" cannot be stored as
+			// an own property on a plain object, so refuse it outright.
+			if (name === "__proto__") {
+				ctx.ui.notify('"__proto__" is a reserved group name', "warning");
+				continue;
+			}
+			if (names.includes(name)) {
+				ctx.ui.notify(`Group "${name}" already exists`, "info");
+			} else {
+				await save({ groups: { [name]: [] } }, `group "${name}" created (empty)`);
+			}
+			await groupRefsMenu(ctx, name, getConfig, save);
+		} else {
+			const name = byLabel.get(pick);
+			if (name) await groupRefsMenu(ctx, name, getConfig, save);
+		}
+	}
+}
+
+/** Edit one group's refs, or delete the group. Refs are shown verbatim
+ * ("*", "@group", "-provider/id", "provider/id"); selecting one removes it. */
+export async function groupRefsMenu(
+	ctx: ExtensionContext,
+	name: string,
+	getConfig: GetConfig,
+	save: MenuSave,
+): Promise<void> {
+	for (;;) {
+		const config = getConfig();
+		const refs = config.groups[name];
+		// Deleted underneath us (or never materialized): back out.
+		if (!Array.isArray(refs)) return;
+		const pick = await ctx.ui.select(`Group "${name}"`, [...refs, "Add ref\u2026", "Delete group", MENU_BACK]);
+		if (!pick || pick === MENU_BACK) return;
+		if (pick === "Add ref\u2026") {
+			const ref = (await ctx.ui.input("Model ref (*, @group, -provider/id, provider/id)", ""))?.trim();
+			if (!ref) continue;
+			if (refs.includes(ref)) {
+				ctx.ui.notify(`"${ref}" is already in group "${name}"`, "info");
+				continue;
+			}
+			await save({ groups: { [name]: [...refs, ref] } }, `group "${name}" ref "${ref}" added`);
+		} else if (pick === "Delete group") {
+			const confirm = await ctx.ui.select(`Delete group "${name}"?`, ["delete", "keep"]);
+			if (confirm !== "delete") continue;
+			// Clear activeGroup/defaultGroup in the same patch when they name the
+			// deleted group: a dangling name would be warn+ignored on reload.
+			const patch: Record<string, unknown> = { groups: { [name]: undefined } };
+			if (config.activeGroup === name) patch.activeGroup = null;
+			if (config.defaultGroup === name) patch.defaultGroup = null;
+			await save(patch, `group "${name}" deleted`);
+			return;
+		} else {
+			// Any other selected line is a ref shown verbatim: selecting removes it.
+			if (!refs.includes(pick)) continue;
+			await save(
+				{ groups: { [name]: refs.filter((r) => r !== pick) } },
+				`group "${name}" ref "${pick}" removed`,
+			);
+		}
+	}
+}
+
 async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
 	for (;;) {
 		const config = getConfig();
@@ -2288,6 +2366,7 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 			`Manual override — ${config.override ?? "none"}`,
 			`Active group — ${activeGroupLabel(config)}`,
 			`Default group — ${groupLabel(config, "defaultGroup")}`,
+			`Groups — ${groupNames.length ? `${groupNames.length} defined` : "none"}`,
 			`Fallback policy — ${config.fallback}`,
 			`Scoring — ${config.scoring.enabled ? "enabled" : "disabled"}`,
 			`Price auto-refresh — ${config.prices.enabled ? "enabled" : "disabled"}`,
@@ -2341,6 +2420,8 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 				if (config.defaultGroup === pick) continue;
 				await save({ defaultGroup: pick }, `defaultGroup = "${pick}" saved`);
 			}
+		} else if (edit.startsWith("Groups")) {
+			await groupsMenu(ctx, getConfig, save);
 		} else if (edit.startsWith("Fallback policy")) {
 			const pick = await ctx.ui.select("Fallback policy", ["cheapest", "strongest"]);
 			if (pick) await save({ fallback: pick }, `fallback = ${pick} saved`);

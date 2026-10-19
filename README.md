@@ -655,9 +655,13 @@ and picked up by the router without a restart (the config file is
 mtime-reloaded on the next route). Editable from the menu:
 
 - **Manual override** - pin all routes to one eligible model, or clear it.
+- **Model groups** - create a group, delete one, or edit a group's refs
+  (add model ids, group refs like `@other`, exclusions like `-provider/id`,
+  or `*` for everything). Deleting a group that is currently the active or
+  default group clears that pointer in the same save. Renaming and reordering
+  stay config-file operations.
 - **Active group** - switch the active model group (or clear it back to the
-  full catalog). Only groups defined in the config file are offered; creating
-  and editing groups themselves stays a config-file operation.
+  full catalog). Only groups defined in the config file are offered.
 - **Default group** - switch the group that drives `/compact` and
   out-of-loop picks (or clear it back to `default` model, then cheapest).
 - **Fallback policy** - `cheapest` or `strongest`.
