@@ -29,7 +29,8 @@
   ],
   "scripts": {
     "test": "node --test tests/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "changelog": "node scripts/changelog.mjs"
   },
   "dependencies": {
     "@receptron/laya": "^0.1.2",
