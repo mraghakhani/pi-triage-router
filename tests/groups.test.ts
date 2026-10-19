@@ -505,6 +505,26 @@ test("refProblems: a ref creating a cycle is flagged", () => {
 	assert.ok(problems.some((p) => p.includes("circular")), "self-cycle flagged");
 });
 
+test("refProblems: a ref creating a mutual cycle with another group is flagged", () => {
+	// g adds "@h" while h already contains "@g" -> the new edge closes a cycle.
+	const groups = { g: [], h: ["@g"] };
+	const problems = refProblems(groups, "g", "@h", CAT);
+	assert.ok(problems.some((p) => p.includes("circular")), "mutual cycle flagged via the new edge");
+});
+
+test("refProblems: a __proto__ group name in the config survives the proposal copy", () => {
+	// validateGroupsSection rejects "__proto__" at load, but a hand-built
+	// (JSON.parse'd) config can hold it; the proposal copy must not hit the
+	// prototype setter and must not corrupt lookups for sibling names.
+	const groups = JSON.parse('{"__proto__": [], "g": []}') as Record<string, string[]>;
+	const problems = refProblems(groups, "g", "litellm/a/b", CAT);
+	assert.deepEqual(problems, [], "no spurious problems from __proto__ pollution");
+	// And the __proto__ group itself still expands as a normal (unknown-model)
+	// group rather than crashing:
+	const prob = refProblems(groups, "__proto__", "provider/nope", CAT);
+	assert.ok(prob.some((p) => p.includes("unknown model")), "__proto__ group name is a usable key");
+});
+
 test("refProblems: pre-existing problems are not re-reported for a new valid ref", () => {
 	// g already references an unknown model (hand-edited file, warned at load);
 	// adding a valid ref must stay quiet.

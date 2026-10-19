@@ -43,11 +43,17 @@ export function refProblems(
 	const existing = groups[name] ?? [];
 	const before: string[] = [];
 	expandGroupRefs(existing, groups, catalog, before);
-	const proposal: Record<string, string[]> = {};
-	for (const [k, v] of Object.entries(groups)) proposal[k] = [...v];
-	proposal[name] = [...existing, ref];
+	// Spread literal (not assignment): a group named "__proto__" in a
+	// JSON.parse'd config is an own key, and `proposal[name] = ...` on
+	// "__proto__" would invoke the prototype setter and corrupt the object.
+	// Spread + computed key use create/define semantics -> own data props.
+	const proposal: Record<string, readonly string[]> = { ...groups, [name]: [...existing, ref] };
 	const after: string[] = [];
 	expandGroupRefs(proposal[name], proposal, catalog, after);
+	// Set-difference, deliberately: the baseline problems of an already-broken
+	// group (hand-edited file) are not re-fired by every edit; only problems
+	// the new ref actually introduces block the save. Order-dependent: the new
+	// ref is appended, so pre-existing problem strings stay byte-identical.
 	return after.filter((problem) => !before.includes(problem));
 }
 

@@ -22,16 +22,24 @@ let configPath: string;
 let notifications: { message: string; level: string }[];
 
 /** Scripted ui: select/input answer from a queue; notify records. */
+// "ESC" in the queue mimics a real pi dialog cancel (select/input return
+// undefined), which the menus handle via `!pick` / `!name` / `!ref`.
+const ESC = "ESC";
+
 function makeCtx(answers: string[]) {
 	return {
 		ui: {
 			select: async (_title: string, options: string[]) => {
 				const next = answers.shift();
+				if (next === ESC) return undefined;
 				assert.ok(next !== undefined, `scripted answer missing (options were ${options.join(" | ")})`);
 				assert.ok(options.includes(next), `scripted answer "${next}" not among options ${options.join(" | ")}`);
 				return next;
 			},
-			input: async (_prompt: string, _initial: string) => answers.shift() ?? "",
+			input: async (_prompt: string, _initial: string) => {
+				const v = answers.shift();
+				return v === ESC ? undefined : v ?? "";
+			},
 			notify: (message: string, level: string) => {
 				notifications.push({ message, level });
 			},
@@ -143,4 +151,47 @@ test("groupRefsMenu accepts a valid ref after rejecting a bad one", async () => 
 	await groupRefsMenu(ctx, "econ", getConfig, save);
 	const raw = JSON.parse(readFileSync(configPath, "utf8"));
 	assert.ok(raw.groups.econ.includes("litellm/c/d"), "valid ref added after rejection loop");
+});
+
+test("Esc cancels: select returning undefined exits the menu without writing", async () => {
+	seedConfig({ groups: { econ: ["a/b"] }, models: [] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	const ctx = makeCtx([ESC]);
+	await groupsMenu(ctx, getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.deepEqual(Object.keys(raw.groups), ["econ"], "no writes on cancel");
+});
+
+test("Esc cancels: undefined from add-ref input continues without writing", async () => {
+	seedConfig({ groups: { econ: ["a/b"] }, models: [] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	// Add ref… -> Esc (input undefined) -> Esc (exit ref menu).
+	const ctx = makeCtx(["Add ref…", ESC, ESC]);
+	await groupRefsMenu(ctx, "econ", getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.deepEqual(raw.groups.econ, ["a/b"], "refs untouched after Esc");
+});
+
+test("Esc cancels: undefined from new-group name input continues without creating", async () => {
+	seedConfig({ groups: { econ: ["a/b"] }, models: [] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	// New group… -> Esc (name undefined) -> Esc (exit groups menu).
+	const ctx = makeCtx(["New group…", ESC, ESC]);
+	await groupsMenu(ctx, getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.deepEqual(Object.keys(raw.groups), ["econ"], "no group created on Esc");
+});
+
+test("two successive adds in one session keep both refs (refs freshness)", async () => {
+	seedConfig({ groups: { econ: [] }, models: [
+		{ provider: "litellm", id: "a/b", description: "x" },
+		{ provider: "litellm", id: "c/d", description: "y" },
+	] });
+	router.setConfigForTests(router.loadConfig(configPath));
+	// Add ref… -> a/b -> Add ref… -> c/d -> Back. If refs were snapshot
+	// before the loop, the second save would drop the first ref.
+	const ctx = makeCtx(["Add ref…", "litellm/a/b", "Add ref…", "litellm/c/d", MENU_BACK]);
+	await groupRefsMenu(ctx, "econ", getConfig, save);
+	const raw = JSON.parse(readFileSync(configPath, "utf8"));
+	assert.deepEqual(raw.groups.econ, ["litellm/a/b", "litellm/c/d"], "second add preserves the first");
 });

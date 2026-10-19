@@ -2284,7 +2284,10 @@ async function jevClassifierMenu(ctx: ExtensionContext, getConfig: GetConfig, sa
 export async function groupsMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuSave): Promise<void> {
 	for (;;) {
 		const config = getConfig();
-		const names = Object.keys(config.groups);
+		// Only array-valued groups are listed: a hand-edited config can hold a
+		// null/string value (validation warns and ignores it on load), and
+		// `.(refs).length` would crash on it — mirror the groupRefsMenu guard.
+		const names = Object.keys(config.groups).filter((n) => Array.isArray(config.groups[n]));
 		// Label -> name map: a group name may contain " (", so the raw pick
 		// cannot be parsed back to the name.
 		const byLabel = new Map(names.map((n) => [`${n} (${config.groups[n].length} refs)`, n]));
@@ -2340,7 +2343,10 @@ export async function groupRefsMenu(
 			const catalog = config.models.map((m) => `${m.provider}/${m.id}`);
 			const problems = refProblems(config.groups, name, ref, catalog);
 			if (problems.length > 0) {
-				ctx.ui.notify(problems.join(" · "), "warning");
+				// TUI notifies truncate long lines: first problem + a count keeps
+				// the message readable and the rest visible after re-prompting.
+				const first = problems[0];
+				ctx.ui.notify(problems.length > 1 ? `${first} (+${problems.length - 1} more)` : first, "warning");
 				continue;
 			}
 			await save({ groups: { [name]: [...refs, ref] } }, `group "${name}" ref "${ref}" added`);
