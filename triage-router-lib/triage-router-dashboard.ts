@@ -310,6 +310,32 @@ export function cacheSummary(config: RouterConfig): string {
 		.replace(/\n$/, "");
 }
 
+/** Model-group definitions: one bullet per group, one sub-bullet per ref.
+ * Sub-bullets keep lines short (the 100-char audit rejects long joined
+ * ref lists) and "*" is shown as "* (all models)". */
+function groupsSection(config: RouterConfig): string {
+	const groups = config.groups;
+	if (!groups) return "";
+	const names = Object.keys(groups);
+	if (names.length === 0) return "";
+	const lines = ["## Model groups", ""];
+	for (const name of names) {
+		const refs = groups[name];
+		// Array.isArray: hand-built configs can hold anything on the prototype chain.
+		if (!Array.isArray(refs)) continue;
+		lines.push(`- ${name} (${refs.length} ref${refs.length === 1 ? "" : "s"}):`);
+		if (refs.length === 0) {
+			lines.push("  - (empty)");
+			continue;
+		}
+		for (const ref of refs) {
+			lines.push(`  - ${ref === "*" ? "* (all models)" : ref}`);
+		}
+	}
+	lines.push("");
+	return lines.join("\n");
+}
+
 /** Multiline config summary (for a notify). */
 export function configSummary(config: RouterConfig): string {
 	return configSection(config)
@@ -327,6 +353,7 @@ export function formatDashboard(config: RouterConfig): string {
 		historySection(),
 		cacheSection(config),
 		configSection(config),
+		groupsSection(config),
 	]
 		.join("\n")
 		.replace(/\n{3,}/g, "\n\n");

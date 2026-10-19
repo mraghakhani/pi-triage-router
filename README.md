@@ -645,6 +645,9 @@ JSON/print modes without dialogs fall back to a Markdown report message):
 - **Cache status** - benchmark and price cache freshness/coverage.
 - **Current config** - classifier backend, jev backend, fallback policy,
   override, and scoring state.
+- **Model groups** - every named group and the model refs it contains
+  (`*` is shown as "all models"; exclusions like `-provider/id` shown as-is).
+  Only rendered when at least one group is defined.
 
 **Edit config** (from the menu) writes changes straight into
 `triage-router.json` - atomically, revalidated, with unknown keys preserved,

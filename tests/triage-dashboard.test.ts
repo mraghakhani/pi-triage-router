@@ -82,6 +82,28 @@ test("formatDashboard with empty history says so and shows no cost", () => {
 	assert.ok(report.includes("Total this session: **-**"));
 });
 
+test("formatDashboard: Model groups section lists each group and its refs", () => {
+	const config = testConfig({
+		groups: {
+			economy: ["litellm/deepseek/deepseek-v4-flash", "litellm/z-ai/glm-5.3-flash"],
+			all: ["*"],
+			empty: [],
+		},
+	});
+	const report = formatDashboard(config);
+	assert.ok(report.includes("## Model groups"), "groups section present");
+	assert.ok(report.includes("- economy (2 refs):"), "group header with ref count");
+	assert.ok(report.includes("  - litellm/deepseek/deepseek-v4-flash"), "ref listed as sub-bullet");
+	assert.ok(report.includes("  - litellm/z-ai/glm-5.3-flash"), "second ref listed");
+	assert.ok(report.includes("- all (1 ref):"), "single ref singular");
+	assert.ok(report.includes("  - * (all models)"), "wildcard shown as all models");
+	assert.ok(report.includes("- empty (0 refs):") && report.includes("  - (empty)"), "empty group handled");
+});
+
+test("formatDashboard: no Model groups section when no groups defined", () => {
+	assert.ok(!formatDashboard(testConfig()).includes("## Model groups"), "no groups, no section");
+});
+
 test("formatDashboard: no line exceeds 100 chars (no wrap on wide terminals)", () => {
 	// Fat config: long group/model/classifier names produce the longest lines
 	// the dashboard can render. Guards the merged group labels (they wrapped
@@ -93,6 +115,8 @@ test("formatDashboard: no line exceeds 100 chars (no wrap on wide terminals)", (
 				"litellm/z-ai/glm-5.3-flash",
 				"openrouter/meta-llama/llama-4-scout",
 			],
+			"everything": ["*"],
+			"except-slow": ["-openrouter/meta-llama/llama-4-scout"],
 		},
 		activeGroup: "economy-openrouter-cheap",
 		defaultGroup: "economy-openrouter-cheap",
