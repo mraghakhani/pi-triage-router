@@ -37,6 +37,8 @@ test.afterEach(() => {
 test("tui mode: report is posted before the menu opens", async () => {
 	const { pi, messages, handler } = makePi();
 	routerDefault(pi);
+	const h = handler();
+	assert.ok(h, "triage command registered");
 	// ui.select throws a sentinel the moment the menu opens: proves the menu
 	// ran AFTER the report and lets the handler's promise settle.
 	const ctx = {
@@ -44,7 +46,7 @@ test("tui mode: report is posted before the menu opens", async () => {
 		hasUI: true,
 		ui: { select: async () => { throw new Error("menu-opened"); } },
 	} as never;
-	await assert.rejects(handler()("", ctx), { message: "menu-opened" });
+	await assert.rejects(h("", ctx), { message: "menu-opened" });
 	assert.equal(messages.length, 1, "exactly one report message before the menu");
 	assert.equal(messages[0].customType, "triage-dashboard");
 	assert.equal(messages[0].display, true);
@@ -55,8 +57,10 @@ test("tui mode: report is posted before the menu opens", async () => {
 test("print/json mode: report is posted, menu is not opened", async () => {
 	const { pi, messages, handler } = makePi();
 	routerDefault(pi);
+	const h = handler();
+	assert.ok(h, "triage command registered");
 	const ctx = { mode: "json" } as never;
-	await handler()("", ctx); // must resolve without touching ui
+	await h("", ctx); // must resolve without touching ui
 	assert.equal(messages.length, 1);
 	assert.equal(messages[0].customType, "triage-dashboard");
 });
