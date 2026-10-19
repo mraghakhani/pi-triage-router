@@ -627,9 +627,9 @@ cost of D but 0.39x the cost of E.
 
 ### `/triage` dashboard
 
-The extension registers a `/triage` slash command that opens an interactive
-menu (pi dialogs - the dashboard never writes into the chat transcript;
-JSON/print modes without dialogs fall back to a Markdown report message):
+The extension registers a `/triage` slash command. Every run posts the full
+Markdown report as a collapsible message (never plain chat text), and in
+interactive TUI mode opens the edit menu on top of it:
 
 - **Model lineup** - every configured entry with its USD/1M-token prices
   (auto-refreshed catalog price wins over the config `priceIn`/`priceOut`),

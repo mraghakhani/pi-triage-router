@@ -2480,15 +2480,18 @@ export default function (pi: ExtensionAPI) {
 			description:
 				"pi-triage-router dashboard: model lineup, session cost, routing history, live config edits",
 			handler: async (_args, ctx) => {
+				// The report IS the dashboard: send it in every mode (collapsible
+				// custom message), then open the interactive menu on top in TUI.
+				// Previously TUI got only the menu and never saw the report -
+				// sections like "## Model groups" were invisible interactively.
+				pi.sendMessage({
+					customType: "triage-dashboard",
+					content: formatDashboard(loadConfig()),
+					display: true,
+					details: undefined,
+				});
 				if (ctx.mode === "tui" && ctx.hasUI && typeof ctx.ui?.select === "function") {
 					await triageMenu(ctx);
-				} else {
-					pi.sendMessage({
-						customType: "triage-dashboard",
-						content: formatDashboard(loadConfig()),
-						display: true,
-						details: undefined,
-					});
 				}
 			},
 		});
