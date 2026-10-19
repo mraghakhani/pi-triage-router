@@ -918,6 +918,12 @@ test("a routed turn logs the context-window exclusion once, not twice", async ()
 		1,
 		`exactly one context-window diagnostic per turn (got ${windowLines.length}: ${JSON.stringify(windowLines)})`,
 	);
+	assert.match(
+		windowLines[0],
+		/excluding \d+ models? below ~\d+ tokens:/,
+		"the surviving line keeps the exclusion diagnostic shape",
+	);
+	assert.match(windowLines[0], /deepseek-v4-pro/, "the excluded sticky model is named");
 });
 
 // 47-49. Criterion construction: descriptions only, no appended pricing
