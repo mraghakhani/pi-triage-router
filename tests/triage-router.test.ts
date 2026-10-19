@@ -883,6 +883,43 @@ test("route() excludes window-ineligible models and re-classifies when sticky no
 	assert.equal(route.model.id, "z-ai/glm-5.3", "sticky v4-pro is window-ineligible: classify picks a fitting model");
 });
 
+test("a routed turn logs the context-window exclusion once, not twice", async () => {
+	// Regression: handleRequest ran the window filter twice per turn - once
+	// inside eligibleModels (logged) and once for the present-but-not-group
+	// set (logged again) - producing two identical stacked
+	// "context window: excluding ..." console lines on every oversized turn.
+	const vm = captureRoute();
+	const ctx = makeCtx({ tokens: 120_000, contextWindow: 1_000_000 }) as never;
+	router.setLayaForTests(
+		mockClassifier({
+			model: { "litellm/z-ai/glm-5.3": 0.9 },
+			complexity: { moderate: 0.9 },
+			category: { coding: 0.9 },
+		}),
+	);
+	const lines: string[] = [];
+	const orig = console.error;
+	console.error = (...args: unknown[]) => lines.push(args.join(" "));
+	try {
+		await vm.route(
+			routeRequest(
+				[userMsg("Continue the refactor of the payments service.")],
+				{ model: "litellm/deepseek/deepseek-v4-pro", summary: "" },
+				"continuation",
+			),
+			ctx,
+		);
+	} finally {
+		console.error = orig;
+	}
+	const windowLines = lines.filter((l) => l.includes("context window:"));
+	assert.equal(
+		windowLines.length,
+		1,
+		`exactly one context-window diagnostic per turn (got ${windowLines.length}: ${JSON.stringify(windowLines)})`,
+	);
+});
+
 // 47-49. Criterion construction: descriptions only, no appended pricing
 // ---------------------------------------------------------------------------
 

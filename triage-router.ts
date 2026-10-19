@@ -1388,12 +1388,22 @@ function applyActiveGroup(config: RouterConfig, present: ModelEntry[]): ModelEnt
 /** Filter a model list by context-window fit (window unknown = kept; never
  * rejected on fabricated limits). When nothing fits, everything is kept
  * (logged) - routing degrades rather than throwing. */
-export function windowEligible(
+interface WindowFilterResult {
+	fits: ModelEntry[];
+	excluded: string[];
+	/** Filtered set was empty, so everything was kept as a fallback. */
+	allBelow: boolean;
+}
+
+/** Pure context-window filter: drops models whose window cannot hold the
+ * upcoming request; when nothing fits, keeps everything (routing degrades
+ * rather than throwing). No logging - see `windowEligible`. */
+function filterByWindow(
 	models: readonly ModelEntry[],
 	registry: RegistryLike,
 	requiredTokens: number | null,
-): ModelEntry[] {
-	if (requiredTokens == null) return [...models];
+): WindowFilterResult {
+	if (requiredTokens == null) return { fits: [...models], excluded: [], allBelow: false };
 	const excluded: string[] = [];
 	const fits = models.filter((entry) => {
 		const win = registry.find(entry.provider, entry.id)?.contextWindow;
@@ -1403,19 +1413,34 @@ export function windowEligible(
 		}
 		return true;
 	});
-	if (fits.length === 0) {
+	if (fits.length === 0) return { fits: [...models], excluded, allBelow: true };
+	return { fits, excluded, allBelow: false };
+}
+
+function logWindowExclusions(result: WindowFilterResult, requiredTokens: number): void {
+	if (result.allBelow) {
 		console.error(
 			`${LOG_PREFIX} context window: every eligible model is below ~${requiredTokens} tokens; keeping all`,
 		);
-		return [...models];
+		return;
 	}
-	if (excluded.length > 0) {
-		const plural = excluded.length === 1 ? "" : "s";
+	if (result.excluded.length > 0) {
+		const plural = result.excluded.length === 1 ? "" : "s";
 		console.error(
-			`${LOG_PREFIX} context window: excluding ${excluded.length} model${plural} below ~${requiredTokens} tokens: ${excluded.join(", ")}`,
+			`${LOG_PREFIX} context window: excluding ${result.excluded.length} model${plural} below ~${requiredTokens} tokens: ${result.excluded.join(", ")}`,
 		);
 	}
-	return fits;
+}
+
+/** Context-window filter with the standard diagnostic logging. */
+export function windowEligible(
+	models: readonly ModelEntry[],
+	registry: RegistryLike,
+	requiredTokens: number | null,
+): ModelEntry[] {
+	const result = filterByWindow(models, registry, requiredTokens);
+	if (requiredTokens != null) logWindowExclusions(result, requiredTokens);
+	return result.fits;
 }
 
 /** Models that are enabled, valid, present in the live registry, and inside
@@ -2614,7 +2639,14 @@ export async function handleRequest(
 	// Present-but-not-group-filtered set: manual override and the sticky model
 	// win even when the active group excludes them (override = user command,
 	// sticky = conversation continuity; both outrank the group filter).
-	const present = windowEligible(presentModels(config, ctx.modelRegistry), ctx.modelRegistry, requiredTokens);
+	// Silent filter: eligibleModels above already logged the same exclusions
+	// for the routing pool; a second identical line just duplicates the log
+	// (two stacked "context window: excluding ..." lines per turn).
+	const present = filterByWindow(
+		presentModels(config, ctx.modelRegistry),
+		ctx.modelRegistry,
+		requiredTokens,
+	).fits;
 
 	// Manual override: validated, takes precedence, visible in diagnostics.
 	if (config.override) {
