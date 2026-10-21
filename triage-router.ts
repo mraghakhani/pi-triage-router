@@ -33,15 +33,17 @@ import {
 	DEFAULT_SCORING_WEIGHTS,
 	datasetStatus,
 	readDataset,
+	refreshNow,
 	scheduleRefresh,
 	scoreEligible,
 	type BenchmarkConfig,
 	type BenchmarkDataset,
 	type CapabilityOverrides,
 	type CategoryWeights,
+	type RefreshDeps,
 	type ScoringConfig,
 } from "./triage-router-lib/triage-router-benchmarks.ts";
-import { readPriceDataset, schedulePriceRefresh, type ModelPrice, type PriceConfig } from "./triage-router-lib/triage-router-prices.ts";
+import { readPriceDataset, refreshPrices, schedulePriceRefresh, type ModelPrice, type PriceConfig, type PriceRefreshDeps } from "./triage-router-lib/triage-router-prices.ts";
 import { checkRemoteClassifier, type RemoteSectionLike } from "./triage-router-lib/triage-router-validation.ts";
 import {
 	filterByComposites,
@@ -2488,6 +2490,32 @@ async function editMenu(ctx: ExtensionContext, getConfig: GetConfig, save: MenuS
 }
 
 /** Interactive /triage dashboard loop. Esc/"Done" exits. */
+/** Manual data refresh: pulls fresh prices + benchmarks for the configured
+ * model ids right now (bypassing the background interval), notifying per part.
+ * Exported for tests; deps inject the fetch just like the background refresh. */
+export async function refreshDataMenu(
+	ctx: ExtensionContext,
+	getConfig: GetConfig,
+	priceDeps: PriceRefreshDeps = {},
+	benchDeps: RefreshDeps = {},
+): Promise<void> {
+	const config = getConfig();
+	const ids = config.models.filter((m) => m.enabled !== false).map((m) => m.id);
+	ctx.ui.notify("Refreshing prices & benchmarks (network)…", "info");
+	const prices = await refreshPrices(config.prices, ids, priceDeps);
+	if (prices.ok) {
+		ctx.ui.notify(`prices refreshed (${Object.keys(prices.dataset?.prices ?? {}).length} models)`, "info");
+	} else {
+		ctx.ui.notify(`price refresh failed: ${prices.error}`, "warning");
+	}
+	const bench = await refreshNow(config.benchmarks, ids, benchDeps);
+	if (bench.ok) {
+		ctx.ui.notify(`benchmarks refreshed (${Object.keys(bench.dataset?.models ?? {}).length} models)`, "info");
+	} else {
+		ctx.ui.notify(`benchmark refresh failed: ${bench.error}`, "warning");
+	}
+}
+
 async function triageMenu(ctx: ExtensionContext): Promise<void> {
 	let config = loadConfig();
 	const getConfig: GetConfig = () => config;
@@ -2502,6 +2530,7 @@ async function triageMenu(ctx: ExtensionContext): Promise<void> {
 			`Session cost${total != null ? ` — ${usdLabel(total)}` : ""}`,
 			`Route history (${routeHistory().length} routes)`,
 			"Cache status",
+			"Refresh prices & benchmarks",
 			"Current config",
 			"Edit config",
 			"Reset config to defaults",
@@ -2512,6 +2541,7 @@ async function triageMenu(ctx: ExtensionContext): Promise<void> {
 		else if (choice.startsWith("Session cost")) ctx.ui.notify(costSummary(), "info");
 		else if (choice.startsWith("Route history")) await historyMenu(ctx);
 		else if (choice === "Cache status") ctx.ui.notify(cacheSummary(config), "info");
+		else if (choice === "Refresh prices & benchmarks") await refreshDataMenu(ctx, getConfig);
 		else if (choice === "Current config") ctx.ui.notify(configSummary(config), "info");
 		else if (choice === "Edit config") await editMenu(ctx, getConfig, save);
 		else if (choice === "Reset config to defaults") await resetMenu(ctx, getConfig, (c) => (config = c));

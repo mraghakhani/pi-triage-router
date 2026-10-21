@@ -643,6 +643,10 @@ interactive TUI mode opens the edit menu on top of it:
 - **Route history** - the last 50 routes of this session (newest first):
   time, model, rule, complexity, category, and estimated cost.
 - **Cache status** - benchmark and price cache freshness/coverage.
+- **Refresh prices & benchmarks** - pulls fresh benchmark and price data
+  for the configured model ids right now (bypassing the 24h background
+  interval). Per-part notifications surface success counts or the error;
+  a failed part keeps the last known good cache.
 - **Current config** - classifier backend, jev backend, fallback policy,
   override, and scoring state.
 - **Model groups** - every named group and the model refs it contains
