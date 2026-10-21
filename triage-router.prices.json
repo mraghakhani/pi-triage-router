@@ -1,5 +1,5 @@
 {
-	"fetchedAt": "2026-10-15T21:36:07.449Z",
+	"fetchedAt": "2026-10-21T19:50:50.299Z",
 	"source": "openrouter-models",
 	"sourceUrl": "https://openrouter.ai/api/v1/models",
 	"prices": {
@@ -8,20 +8,20 @@
 			"output": 0.182
 		},
 		"z-ai/glm-5.3-flash": {
-			"input": 0.15,
-			"output": 0.5
+			"input": 0.0143,
+			"output": 0.07179999999999999
 		},
 		"z-ai/glm-5.3": {
-			"input": 0.09999999999999999,
-			"output": 4.8
+			"input": 0.079,
+			"output": 1.4
 		},
 		"deepseek/deepseek-v4-pro": {
-			"input": 0.365052,
-			"output": 0.730104
+			"input": 0.40716,
+			"output": 0.81432
 		},
 		"deepseek/deepseek-v4.1-flash": {
-			"input": 0.15,
-			"output": 0.6
+			"input": 0.023940000000000003,
+			"output": 0.375
 		},
 		"deepseek/deepseek-v4.1-flash-1017": {
 			"input": 0.15,
@@ -44,8 +44,8 @@
 			"output": 4.25
 		},
 		"moonshotai/kimi-k3": {
-			"input": 0.29,
-			"output": 12
+			"input": 0.23900000000000002,
+			"output": 11.936
 		}
 	}
 }
