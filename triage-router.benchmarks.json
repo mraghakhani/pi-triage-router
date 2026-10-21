@@ -98,6 +98,24 @@
 				"openrouter"
 			]
 		},
+		"deepseek/deepseek-v4.1-flash-1017": {
+			"coding": null,
+			"reasoning": 39.5,
+			"agentic": null,
+			"arena": null,
+			"gpqa": 0.878788,
+			"taskSuccess": 0.7683335,
+			"costPerTask": 0.03325037,
+			"research": null,
+			"infra": null,
+			"updatedAt": "2026-10-13T12:01:51.649Z",
+			"match": "dated",
+			"variants": 1,
+			"sources": [
+				"artificial-analysis",
+				"openrouter"
+			]
+		},
 		"deepseek/deepseek-v4-pro-0813": {
 			"coding": null,
 			"reasoning": null,

@@ -37,6 +37,13 @@
     },
     {
       "provider": "litellm",
+      "id": "deepseek/deepseek-v4.1-flash-1017",
+      "description": "Dated snapshot of v4.1-flash; same price, same quality, pinned version.",
+      "priceIn": 0.15,
+      "priceOut": 0.6
+    },
+    {
+      "provider": "litellm",
       "id": "deepseek/deepseek-v4-pro-0813",
       "description": "Long-duration deep agent runs that need sustained quality across steps.",
       "priceIn": 0.66,
@@ -85,7 +92,8 @@
     "all": ["*"],
     "economy": [
       "litellm/deepseek/deepseek-v4-flash",
-      "litellm/z-ai/glm-5.3-flash"
+      "litellm/z-ai/glm-5.3-flash",
+      "litellm/deepseek/deepseek-v4.1-flash-1017"
     ],
     "standard": [
       "litellm/z-ai/glm-5.3",

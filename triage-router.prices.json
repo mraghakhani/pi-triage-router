@@ -23,6 +23,10 @@
 			"input": 0.15,
 			"output": 0.6
 		},
+		"deepseek/deepseek-v4.1-flash-1017": {
+			"input": 0.15,
+			"output": 0.6
+		},
 		"deepseek/deepseek-v4-pro-0813": {
 			"input": 0.66,
 			"output": 1.9800000000000002
