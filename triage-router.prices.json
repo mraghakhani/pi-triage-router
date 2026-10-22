@@ -1,5 +1,5 @@
 {
-	"fetchedAt": "2026-10-21T21:42:49.967Z",
+	"fetchedAt": "2026-10-22T08:22:53.179Z",
 	"source": "openrouter-models",
 	"sourceUrl": "https://openrouter.ai/api/v1/models",
 	"prices": {
@@ -8,28 +8,28 @@
 			"output": 0.182
 		},
 		"z-ai/glm-5.3-flash": {
-			"input": 0.00441,
-			"output": 0.1015
+			"input": 0.0075,
+			"output": 0.1825
 		},
 		"z-ai/glm-5.3": {
 			"input": 0.079,
 			"output": 1.4
 		},
 		"deepseek/deepseek-v4-pro": {
-			"input": 0.398808,
-			"output": 0.797616
+			"input": 0.9552599999999999,
+			"output": 1.9105199999999998
 		},
 		"deepseek/deepseek-v4.1-flash": {
-			"input": 0.023940000000000003,
-			"output": 0.09576000000000001
+			"input": 0.3,
+			"output": 1.2
 		},
-		"deepseek/deepseek-v4.1-flash-20261017": {
-			"input": 0.15,
-			"output": 0.6
+		"deepseek/deepseek-v4.1-flash-1017": {
+			"input": 0.3,
+			"output": 1.2
 		},
-		"deepseek/deepseek-v4-pro-20260813": {
-			"input": 0.66,
-			"output": 1.9800000000000002
+		"deepseek/deepseek-v4-pro-0813": {
+			"input": 1.32,
+			"output": 3.9600000000000004
 		},
 		"xiaomi/mimo-v2.6-flash": {
 			"input": 0.14,

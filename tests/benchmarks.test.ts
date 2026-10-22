@@ -126,6 +126,32 @@ test("resolveSlug: exact, dated, and never family-prefix", () => {
 	assert.equal(resolveSlug("gpt-5", "gpt-5-0831", 2026), "dated", "real MMDD still matches");
 });
 
+test("resolveSlug: MMDD routing ids bridge to YYYYMMDD benchmark permaslugs", () => {
+	// Routing ids use the short MMDD form (what litellm/OpenRouter chat serve);
+	// the unified benchmark endpoint keys rows by the full YYYYMMDD permaslug.
+	assert.equal(
+		resolveSlug("deepseek/deepseek-v4.1-flash-1017", "deepseek/deepseek-v4.1-flash-20261017", 2026),
+		"dated",
+		"month-day pair bridges the two notations",
+	);
+	assert.equal(
+		resolveSlug("deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v4-pro-20260813", 2026),
+		"dated",
+	);
+	// A different release of the same base must never match: -1017 is not -0910.
+	assert.equal(
+		resolveSlug("deepseek/deepseek-v4.1-flash-1017", "deepseek/deepseek-v4.1-flash-20260910", 2026),
+		null,
+		"different month-day is a different release",
+	);
+	assert.equal(resolveSlug("deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v4-pro-20260423", 2026), null);
+	// Exact still wins over the bridge; non-calendar and prefix mismatches stay null.
+	assert.equal(resolveSlug("a/b-1017", "a/b-1017", 2026), "exact");
+	assert.equal(resolveSlug("a/b-1234", "a/b-20261234", 2026), null, "day 34 is not a calendar date");
+	assert.equal(resolveSlug("a/b-1017", "a/b-flash-20261017", 2026), null, "family prefix excluded");
+	assert.equal(resolveSlug("a/b-1017", "a/b-0910", 2026), null, "4-digit slug with a different month-day");
+});
+
 test("normalizeUnified resolves variants, winners, and every metric group", () => {
 	const dataset = normalizeUnified(ROWS as never, META, "2026-10-10T00:00:00Z", "https://openrouter.ai/api/v1/benchmarks", IDS);
 	const glm = dataset.models["z-ai/glm-5.3"];
@@ -159,6 +185,31 @@ test("normalizeUnified resolves variants, winners, and every metric group", () =
 	assert.equal(missing.match, "exact");
 	assert.equal(dataset.asOf, META.as_of);
 	assert.equal(dataset.sourceUrl, "https://openrouter.ai/api/v1/benchmarks");
+});
+
+test("normalizeUnified: MMDD routing ids get real metrics from YYYYMMDD permaslug rows", () => {
+	// Config keeps the short routing id (-1017); the endpoint only publishes
+	// the full-date permaslug (-20261017). The bridge must attach this
+	// release's rows to the pinned id — and never a sibling release's.
+	const rows = [
+		{ source: "artificial-analysis", model_permaslug: "deepseek/deepseek-v4.1-flash-20261017", intelligence_index: 39.5, coding_index: null, agentic_index: null },
+		{ source: "openrouter", model_permaslug: "deepseek/deepseek-v4.1-flash-20261017", benchmark_type: "gpqa_diamond", accuracy: 0.904, last_run_timestamp: "2026-10-18T00:00:00Z" },
+		// Sibling release: must NOT bleed into the -1017 id.
+		{ source: "artificial-analysis", model_permaslug: "deepseek/deepseek-v4.1-flash-20260910", intelligence_index: 24.7 },
+	];
+	const dataset = normalizeUnified(rows as never, META, "2026-10-21T00:00:00Z", "https://openrouter.ai/api/v1/benchmarks", [
+		"deepseek/deepseek-v4.1-flash-1017",
+	]);
+	const m = dataset.models["deepseek/deepseek-v4.1-flash-1017"];
+	assert.equal(m.reasoning, 39.5, "bridged release's own AA index");
+	assert.equal(m.gpqa, 0.904, "bridged release's own eval accuracy");
+	assert.equal(m.match, "dated");
+	assert.ok(m.sources.includes("artificial-analysis") && m.sources.includes("openrouter"));
+	// The base id still resolves the newest dated release of its family.
+	const base = normalizeUnified(rows as never, META, "2026-10-21T00:00:00Z", "https://openrouter.ai/api/v1/benchmarks", [
+		"deepseek/deepseek-v4.1-flash",
+	]).models["deepseek/deepseek-v4.1-flash"];
+	assert.equal(base.reasoning, 39.5, "base takes the newest dated release (20261017), not 20260910");
 });
 
 test("normalizeModelsCatalog: keyless source carries AA indices only", () => {

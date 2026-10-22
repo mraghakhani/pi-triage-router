@@ -25,6 +25,10 @@
  *    (`-YYYYMMDD` / `-MMDD`, aligned to the dataset year) is stripped and
  *    matched; the newest dated release wins; same-release variant rows are
  *    averaged and counted. Provenance (`match`, `variants`) stays attached.
+ *  - Config ids may use the short routing form `-MMDD` (what litellm and the
+ *    OpenRouter chat surface actually route): the benchmark permaslug's full
+ *    `-YYYYMMDD` date matches when its month-day equals the id's suffix, so a
+ *    pinned snapshot keeps its own release's rows.
  *
  * This module type-imports shared types from triage-router.ts but imports no
  * runtime values from it (the router imports values from here).
@@ -227,16 +231,28 @@ function isValidMMDD(digits: string): boolean {
 /**
  * Resolve a config model id to a benchmark permaslug: exact match, else a
  * trailing release date is stripped (`-YYYYMMDD`, or `-MMDD` interpreted with
- * the dataset's year when known). Never a family prefix match, so
- * `z-ai/glm-5.3` can never be served `z-ai/glm-5.3-flash` rows.
+ * the dataset's year when known). A config id ending in a valid `-MMDD`
+ * (the short routing form, e.g. `-1017`) also matches the permaslug whose
+ * full `-YYYYMMDD` date ends with that month-day (`-20261017`): the month-day
+ * pair pins the exact release, so `-1017` never picks up `-0910` rows. Never
+ * a family prefix match, so `z-ai/glm-5.3` can never be served
+ * `z-ai/glm-5.3-flash` rows.
  */
 export function resolveSlug(id: string, slug: string, datasetYear?: number): "exact" | "dated" | null {
 	if (slug === id) return "exact";
 	const m = DATED_SLUG_RE.exec(slug);
-	if (!m || m[1] !== id) return null;
-	if (m[2].length === 8) return "dated";
-	if (m[2].length === 4 && datasetYear && isValidMMDD(m[2])) return "dated";
-	return null;
+	if (!m) return null;
+	if (m[1] === id) {
+		if (m[2].length === 8) return "dated";
+		if (m[2].length === 4 && datasetYear && isValidMMDD(m[2])) return "dated";
+		return null;
+	}
+	// Bridge: routing ids carry the short MMDD suffix; benchmark permaslugs
+	// carry the full YYYYMMDD date. The trailing month-day must be equal and
+	// the base prefix exact — a different release or a family prefix never matches.
+	const idm = /^(.*)-(\d{4})$/.exec(id);
+	if (!idm || !isValidMMDD(idm[2])) return null;
+	return m[1] === idm[1] && m[2].length === 8 && m[2].slice(4) === idm[2] ? "dated" : null;
 }
 
 /** Sort key for dated slugs: bigger = newer. Exact (undated) is treated as newest-canonical. */

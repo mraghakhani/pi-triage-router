@@ -505,9 +505,13 @@ Behavior:
 - **Identity discipline**: rows attach to a model by exact permaslug or by
   stripping a trailing release date (`-YYYYMMDD`/`-MMDD`); newest release
   wins; same-release display variants are averaged (`variants` recorded).
-  Family prefixes never match (`glm-5.3-flash` cannot lend scores to
-  `glm-5.3`). `match`, `variants`, `sources`, `updatedAt` stay attached.
-  Missing values stay `null` - never invented, never borrowed.
+  Config ids written in the short routing form (`-MMDD`, what litellm and
+  the OpenRouter chat surface serve) bridge to the endpoint's full-date
+  permaslug when the month-day pair matches (`-1017` ↔ `-20261017`), so a
+  pinned snapshot keeps its own release's scores. Family prefixes never
+  match (`glm-5.3-flash` cannot lend scores to `glm-5.3`). `match`,
+  `variants`, `sources`, `updatedAt` stay attached. Missing values stay
+  `null` - never invented, never borrowed.
 
 ## Scoring policy (`scoring` section, default off)
 

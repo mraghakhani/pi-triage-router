@@ -1,8 +1,8 @@
 {
-	"fetchedAt": "2026-10-21T21:42:52.603Z",
+	"fetchedAt": "2026-10-22T08:22:55.014Z",
 	"source": "openrouter",
 	"sourceUrl": "https://openrouter.ai/api/v1/benchmarks",
-	"asOf": "2026-10-21T18:18:28.156Z",
+	"asOf": "2026-10-22T00:01:09.429Z",
 	"models": {
 		"deepseek/deepseek-v4-flash": {
 			"coding": 69.1,
@@ -14,7 +14,7 @@
 			"costPerTask": 0.009324213999999999,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -33,7 +33,7 @@
 			"costPerTask": 0.00357748,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -52,7 +52,7 @@
 			"costPerTask": 0.01597332,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -71,7 +71,7 @@
 			"costPerTask": 0.10385739777777778,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -84,13 +84,13 @@
 			"coding": null,
 			"reasoning": 39.5,
 			"agentic": null,
-			"arena": 1335,
+			"arena": 1333,
 			"gpqa": 0.878788,
 			"taskSuccess": 0.7666669999999999,
 			"costPerTask": 0.02129738,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -99,17 +99,17 @@
 				"openrouter"
 			]
 		},
-		"deepseek/deepseek-v4.1-flash-20261017": {
+		"deepseek/deepseek-v4.1-flash-1017": {
 			"coding": null,
 			"reasoning": 39.5,
 			"agentic": null,
-			"arena": 1335,
+			"arena": 1333,
 			"gpqa": 0.9040400000000001,
 			"taskSuccess": 0.7666669999999999,
 			"costPerTask": 0.02129738,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -118,7 +118,7 @@
 				"openrouter"
 			]
 		},
-		"deepseek/deepseek-v4-pro-20260813": {
+		"deepseek/deepseek-v4-pro-0813": {
 			"coding": 68.8,
 			"reasoning": 36,
 			"agentic": 41.3,
@@ -128,7 +128,7 @@
 			"costPerTask": 0.10385739777777778,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -146,7 +146,7 @@
 			"costPerTask": 0.015385413333333335,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -158,13 +158,13 @@
 			"coding": null,
 			"reasoning": 46.3,
 			"agentic": null,
-			"arena": 1316,
+			"arena": 1317,
 			"gpqa": 0.878788,
 			"taskSuccess": 0.7666665,
 			"costPerTask": 0.066754105,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -183,7 +183,7 @@
 			"costPerTask": null,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -195,13 +195,13 @@
 			"coding": 76.2,
 			"reasoning": 43.6,
 			"agentic": 50,
-			"arena": 1361,
+			"arena": 1360,
 			"gpqa": 0.9192753646408839,
 			"taskSuccess": 0.7279999,
 			"costPerTask": 0.29079123999999995,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
@@ -220,7 +220,7 @@
 			"costPerTask": null,
 			"research": null,
 			"infra": null,
-			"updatedAt": "2026-10-21T18:18:28.156Z",
+			"updatedAt": "2026-10-22T00:01:09.429Z",
 			"match": "dated",
 			"variants": 1,
 			"sources": [
