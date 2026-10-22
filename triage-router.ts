@@ -383,7 +383,6 @@ function validateModelEntry(raw: unknown, index: number, classifierLocal: boolea
 	}
 	if (m.descriptionRemote !== undefined && (typeof m.descriptionRemote !== "string" || m.descriptionRemote.trim() === "")) {
 		problems.push(`models[${index}]: invalid "descriptionRemote" (must be a non-empty string); ignoring`);
-		delete m.descriptionRemote;
 	}
 	for (const key of ["priceIn", "priceOut"]) {
 		if (m[key] !== undefined && (typeof m[key] !== "number" || !Number.isFinite(m[key]) || m[key] < 0)) {
