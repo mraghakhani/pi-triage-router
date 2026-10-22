@@ -1483,16 +1483,30 @@ function composite(entry: ModelEntry): string {
 	return `${entry.provider}/${entry.id}`;
 }
 
-/** Effective input price (USD/1M tokens) for routing rules: live registry
- * cost, then the auto-refreshed price cache, then the config `priceIn`. */
+/** Effective input price (USD/1M tokens) for routing rules. Config pins win:
+ * OpenRouter catalog prices for dynamic-priced models (time-windowed
+ * snapshots, e.g. DeepSeek off-peak/peak overrides) fluctuate between
+ * refreshes, so a user-declared `priceIn` is the reference; the live registry
+ * cost and the auto-refreshed price cache only fill models without pins. */
 export type PriceResolver = (entry: ModelEntry) => number | undefined;
+
+/** Effective input/output prices (USD/1M tokens) for one model entry, in the
+ * shared resolution order: config pin -> live registry cost -> price cache. */
+function effectivePrices(
+	entry: ModelEntry,
+	registryModel: RegistryModel | undefined,
+	cachedPrice?: ModelPrice | null,
+): { input: number | undefined; output: number | undefined } {
+	return {
+		input: entry.priceIn ?? registryModel?.cost?.input ?? cachedPrice?.input,
+		output: entry.priceOut ?? registryModel?.cost?.output ?? cachedPrice?.output,
+	};
+}
 
 function priceResolver(ctx: ExtensionContext, config: RouterConfig): PriceResolver {
 	const dataset = config.prices.enabled ? readPriceDataset(config.prices.cachePath, config.prices.seedPath) : null;
 	return (entry) =>
-		ctx.modelRegistry.find(entry.provider, entry.id)?.cost?.input ??
-		dataset?.prices[entry.id]?.input ??
-		entry.priceIn;
+		effectivePrices(entry, ctx.modelRegistry.find(entry.provider, entry.id), dataset?.prices[entry.id]).input;
 }
 
 /** Cached catalog price for a model id (null-cache-aware). */
@@ -1745,11 +1759,12 @@ export function estimateCost(
 	promptChars: number,
 	contextTokens: number | null,
 	lastUsage: SessionPeek["lastUsage"],
-	/** Auto-refreshed catalog price; registry cost still wins. */
+	/** Auto-refreshed catalog price; a config pin still wins. */
 	cachedPrice?: ModelPrice | null,
 ): CostEstimate {
-	const priceIn = registryModel?.cost?.input ?? cachedPrice?.input ?? entry.priceIn ?? null;
-	const priceOut = registryModel?.cost?.output ?? cachedPrice?.output ?? entry.priceOut ?? null;
+	const eff = effectivePrices(entry, registryModel, cachedPrice);
+	const priceIn = eff.input ?? null;
+	const priceOut = eff.output ?? null;
 	const usageMatches =
 		lastUsage != null && lastUsage.model === entry.id && lastUsage.provider === entry.provider;
 	let inputTokens: number | null = null;
@@ -2057,9 +2072,7 @@ export async function classifyAndDecide(
 				dataset: readDataset(config.benchmarks.cachePath, config.benchmarks.seedPath),
 				estimatedCost: (entry: ModelEntry) => {
 					const reg = ctx.modelRegistry.find(entry.provider, entry.id);
-					const cached = cachedPriceFor(config, entry.id);
-					const pIn = reg?.cost?.input ?? cached?.input ?? entry.priceIn;
-					const pOut = reg?.cost?.output ?? cached?.output ?? entry.priceOut;
+					const { input: pIn, output: pOut } = effectivePrices(entry, reg, cachedPriceFor(config, entry.id));
 					if (typeof pIn !== "number" || typeof pOut !== "number") return null;
 					return (
 						(config.scoring.expectedInputTokens / 1e6) * pIn +

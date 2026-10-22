@@ -32,15 +32,15 @@
       "provider": "litellm",
       "id": "deepseek/deepseek-v4.1-flash",
       "description": "Agentic tool use when v4-flash underperforms; newer flash generation.",
-      "priceIn": 0.15,
-      "priceOut": 0.6
+      "priceIn": 0.07,
+      "priceOut": 0.5
     },
     {
       "provider": "litellm",
       "id": "deepseek/deepseek-v4.1-flash-1017",
       "description": "Dated snapshot of v4.1-flash; same price, same quality, pinned version.",
-      "priceIn": 0.15,
-      "priceOut": 0.6
+      "priceIn": 0.07,
+      "priceOut": 0.5
     },
     {
       "provider": "litellm",

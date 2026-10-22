@@ -107,17 +107,22 @@ function timeLabel(timestamp: number): string {
 	return new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-/** Price used by the report: cached catalog price wins over config price. */
+/** Price used by the report. Config pins win: OpenRouter catalog prices for
+ * dynamic-priced models (time-windowed snapshots) fluctuate between refreshes,
+ * so a user-declared `priceIn`/`priceOut` is the reference and the refreshed
+ * catalog cache only fills models without pins. */
 function reportPrice(
 	config: RouterConfig,
 	entry: ModelEntry,
 ): { input: number | null; output: number | null; source: "cache" | "config" } {
-	if (config.prices.enabled) {
-		const dataset = readPriceDataset(config.prices.cachePath, config.prices.seedPath);
-		const cached = dataset?.prices[entry.id];
-		if (cached) return { input: cached.input, output: cached.output, source: "cache" };
-	}
-	return { input: entry.priceIn ?? null, output: entry.priceOut ?? null, source: "config" };
+	const cached = config.prices.enabled
+		? readPriceDataset(config.prices.cachePath, config.prices.seedPath)?.prices[entry.id]
+		: undefined;
+	return {
+		input: entry.priceIn ?? cached?.input ?? null,
+		output: entry.priceOut ?? cached?.output ?? null,
+		source: entry.priceIn === undefined && entry.priceOut === undefined && cached ? "cache" : "config",
+	};
 }
 
 /** One quality metric from the benchmark cache for the lineup table. */
