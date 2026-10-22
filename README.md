@@ -293,9 +293,11 @@ per (re)load and skipped; the router keeps working with the valid entries.
 }
 ```
 
-`description` is the criterion Laya scores - one short sentence (<= 200
-chars, task-fit first; the validator flags longer ones) so all six criteria
-fit Laya's ~195-token question head. Pricing is **never** appended text: the
+`description` is the criterion the classifier scores - one short sentence
+(<= 200 chars, task-fit first; the validator flags longer ones **only when
+the classifier runs as local Laya**) so all criteria fit Laya's ~195-token
+question head. Remote backends (`"provider": "openrouter"`/`"litellm"`,
+e.g. Jev) receive the full text - longer descriptions are fine there. Pricing is **never** appended text: the
 old auto-appended price line sat last in each criterion and was the first
 casualty of head truncation. Price is handled by deterministic rules instead:
 `budget`-tagged work -> cheapest eligible, escalation -> strongest eligible,

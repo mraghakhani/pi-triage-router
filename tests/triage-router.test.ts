@@ -999,6 +999,26 @@ test("oversized descriptions are flagged so criteria stay inside Laya's head bud
 		"length guard reported",
 	);
 	assert.equal(flagged.models.length, 1, "problem is non-fatal: the entry is still used");
+	// Remote classifier backends receive the full criteria text - no Laya head
+	// budget, so no warning (even with the same oversized description).
+	const remote = router.validateConfig({
+		models: [{ provider: "litellm", id: "deepseek/deepseek-v4-flash", description: long, priceIn: 0.01 }],
+		classifier: { provider: "openrouter" },
+	});
+	assert.equal(
+		remote.problems.filter((p) => p.includes("short sentence")).length,
+		0,
+		"no length guard for a remote classifier",
+	);
+	const remoteLitellm = router.validateConfig({
+		models: [{ provider: "litellm", id: "deepseek/deepseek-v4-flash", description: long, priceIn: 0.01 }],
+		classifier: { provider: "litellm" },
+	});
+	assert.equal(
+		remoteLitellm.problems.filter((p) => p.includes("short sentence")).length,
+		0,
+		"no length guard for litellm either",
+	);
 	const { readFileSync } = await import("node:fs");
 	const shipped = router.validateConfig(JSON.parse(readFileSync(new URL("../triage-router.json", import.meta.url), "utf8")));
 	assert.equal(shipped.problems.filter((p) => p.includes("short sentence")).length, 0, "shipped descriptions pass the guard");

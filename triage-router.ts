@@ -349,7 +349,7 @@ const PRICE_KEYS = new Set(["enabled", "cachePath", "refreshIntervalMs", "timeou
 const SCORING_KEYS = new Set(["enabled", "missingPolicy", "missingPenalty", "stalePolicy", "expectedInputTokens", "expectedOutputTokens", "complexityQualityDelta", "classifierWeight", "weights"]);
 const CAPABILITY_KEYS = new Set(["coding", "reasoning", "agentic", "infra", "taskSuccess", "research"]);
 
-function validateModelEntry(raw: unknown, index: number, problems: string[]): ModelEntry | null {
+function validateModelEntry(raw: unknown, index: number, classifierLocal: boolean, problems: string[]): ModelEntry | null {
 	if (typeof raw !== "object" || raw === null) {
 		problems.push(`models[${index}]: not an object`);
 		return null;
@@ -367,10 +367,12 @@ function validateModelEntry(raw: unknown, index: number, problems: string[]): Mo
 		problems.push(`models[${index}]: missing or invalid "description"`);
 		return null;
 	}
-	if (m.description.length > 200) {
-		// Criteria text shares Laya's ~195-token head across all options; long
-		// descriptions get tail-truncated inside Laya exactly like the old
-		// price line did. One short sentence, task-fit first.
+	if (classifierLocal && m.description.length > 200) {
+		// Only the local Laya backend shares a ~195-token head across all
+		// options; long descriptions get tail-truncated inside Laya exactly
+		// like the old price line did. One short sentence, task-fit first.
+		// Remote backends (openrouter/litellm) receive the full text, so the
+		// budget - and this warning - does not apply to them.
 		problems.push(
 			`models[${index}] "${m.provider}/${m.id}": description is ${m.description.length} chars; keep it one short sentence (<= 200 chars), task-fit first - Laya's head budget truncates long criteria`,
 		);
@@ -814,7 +816,7 @@ export function validateConfig(raw: unknown): RouterConfig {
 	if (Array.isArray(obj.models)) {
 		const entries: ModelEntry[] = [];
 		for (let i = 0; i < obj.models.length; i++) {
-			const entry = validateModelEntry(obj.models[i], i, problems);
+			const entry = validateModelEntry(obj.models[i], i, config.classifier.provider === "local", problems);
 			if (!entry) continue;
 			const composite = `${entry.provider}/${entry.id}`;
 			if (seen.has(composite)) {
