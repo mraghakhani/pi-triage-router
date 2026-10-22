@@ -190,6 +190,10 @@ export interface ModelEntry {
 	id: string;
 	/** Criterion Laya scores against: when should this model be used? One concrete line. */
 	description: string;
+	/** Richer criterion for remote classifier backends (openrouter/litellm, e.g.
+	 * Jev), which have no head budget. Optional; absent = `description` is used
+	 * for remote scoring too. Local Laya never reads this field. */
+	descriptionRemote?: string;
 	/** Input price in USD per 1M tokens. Optional; absent = unknown. 0 is a legitimate value. */
 	priceIn?: number;
 	/** Output price in USD per 1M tokens. Optional; absent = unknown. */
@@ -324,7 +328,7 @@ type LayaRouteRequest = ModelRouteRequest<LayaState>;
 // Configuration loading and validation
 // ---------------------------------------------------------------------------
 
-const KNOWN_MODEL_KEYS = new Set(["provider", "id", "description", "priceIn", "priceOut", "enabled", "capabilities"]);
+const KNOWN_MODEL_KEYS = new Set(["provider", "id", "description", "descriptionRemote", "priceIn", "priceOut", "enabled", "capabilities"]);
 const KNOWN_CONFIG_KEYS = new Set([
 	"models",
 	"default",
@@ -377,6 +381,10 @@ function validateModelEntry(raw: unknown, index: number, classifierLocal: boolea
 			`models[${index}] "${m.provider}/${m.id}": description is ${m.description.length} chars; keep it one short sentence (<= 200 chars), task-fit first - Laya's head budget truncates long criteria`,
 		);
 	}
+	if (m.descriptionRemote !== undefined && (typeof m.descriptionRemote !== "string" || m.descriptionRemote.trim() === "")) {
+		problems.push(`models[${index}]: invalid "descriptionRemote" (must be a non-empty string); ignoring`);
+		delete m.descriptionRemote;
+	}
 	for (const key of ["priceIn", "priceOut"]) {
 		if (m[key] !== undefined && (typeof m[key] !== "number" || !Number.isFinite(m[key]) || m[key] < 0)) {
 			problems.push(`models[${index}]: "${key}" must be a number >= 0 (USD per 1M tokens)`);
@@ -414,6 +422,9 @@ function validateModelEntry(raw: unknown, index: number, classifierLocal: boolea
 		provider: m.provider,
 		id: m.id,
 		description: m.description,
+		...(typeof m.descriptionRemote === "string" && m.descriptionRemote.trim() !== ""
+			? { descriptionRemote: m.descriptionRemote }
+			: {}),
 		priceIn: m.priceIn as number | undefined,
 		priceOut: m.priceOut as number | undefined,
 		enabled: m.enabled === false ? false : true,
@@ -1235,13 +1246,16 @@ export async function getLaya(cacheDir?: string | null, onProgress?: LayaLoadPro
 	return layaPromise;
 }
 
-/** Criteria Laya scores model choices against: the description only - one
- * short, task-fit-first sentence. Pricing is never appended here: all criteria
- * share Laya's ~195-token head budget, and appended text truncates last-first,
- * which silently dropped the price line anyway. Price is handled by the
- * deterministic rules instead (budget category, escalation, fallback policy). */
-export function describe(entry: ModelEntry): string {
-	return entry.description;
+/** Criteria the classifier scores model choices against: the description only -
+ * one short, task-fit-first sentence for local Laya; the richer
+ * `descriptionRemote` when a remote backend (openrouter/litellm, e.g. Jev)
+ * scores - it has no head budget, falling back to `description` when absent.
+ * Pricing is never appended here: Laya's criteria share a ~195-token head
+ * budget, and appended text truncates last-first, which silently dropped the
+ * price line anyway. Price is handled by the deterministic rules instead
+ * (budget category, escalation, fallback policy). */
+export function describe(entry: ModelEntry, remote = false): string {
+	return remote && entry.descriptionRemote !== undefined ? entry.descriptionRemote : entry.description;
 }
 
 // ---------------------------------------------------------------------------
@@ -1979,7 +1993,7 @@ export async function classifyAndDecide(
 	const summary = refreshSummary(stateSummary, request.messages, config);
 	const input = buildRoutingInput(request.messages, summary, session.summary, config, handle.classifier, roleText);
 	const criteria: Record<string, string> = {};
-	for (const entry of eligible) criteria[composite(entry)] = describe(entry);
+	for (const entry of eligible) criteria[composite(entry)] = describe(entry, section.provider !== "local");
 	const questions = {
 		model: {
 			type: "choice",

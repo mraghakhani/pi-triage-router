@@ -961,6 +961,39 @@ test("describe() returns the description verbatim with no pricing text", () => {
 	}
 });
 
+test("describe(): descriptionRemote is used only for remote scoring, with fallback to description", () => {
+	const entry: router.ModelEntry = {
+		provider: "litellm",
+		id: "deepseek/deepseek-v4-flash",
+		description: "Any request; short Laya-safe criterion.",
+		descriptionRemote: "Rich remote criterion: strengths, failure modes, and when escalation pays off.",
+	};
+	assert.equal(router.describe(entry), entry.description, "local default");
+	assert.equal(router.describe(entry, false), entry.description, "explicit local");
+	assert.equal(
+		router.describe(entry, true),
+		"Rich remote criterion: strengths, failure modes, and when escalation pays off.",
+		"remote picks the rich variant",
+	);
+	// Models without descriptionRemote keep the base description everywhere.
+	const plain: router.ModelEntry = { provider: "litellm", id: "x/y", description: "short" };
+	assert.equal(router.describe(plain, true), "short", "remote falls back to description");
+});
+
+test("validateConfig: descriptionRemote is carried through; invalid values are ignored with a problem", () => {
+	const ok = router.validateConfig({
+		models: [{ provider: "litellm", id: "x/y", description: "short", descriptionRemote: "rich remote criterion", priceIn: 0.01 }],
+	});
+	assert.equal(ok.problems.filter((p) => p.includes("descriptionRemote")).length, 0, "no problems for a valid remote description");
+	assert.equal(ok.models[0].descriptionRemote, "rich remote criterion", "carried into the entry");
+	const bad = router.validateConfig({
+		models: [{ provider: "litellm", id: "x/y", description: "short", descriptionRemote: "   ", priceIn: 0.01 }],
+	});
+	assert.ok(bad.problems.some((p) => p.includes("descriptionRemote") && p.includes("ignoring")), "blank remote description flagged");
+	assert.equal(bad.models[0].descriptionRemote, undefined, "invalid value dropped");
+	assert.equal(bad.models[0].description, "short", "entry itself stays valid");
+});
+
 test("the model question's criteria are the short descriptions, never price lines", async () => {
 	const seen: { model: { criteria?: Record<string, string> } }[] = [];
 	const capturing = {

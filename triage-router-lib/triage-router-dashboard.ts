@@ -284,6 +284,7 @@ export function modelDetail(config: RouterConfig, id: string): string {
 		`coding index: ${quality ?? "-"}`,
 		`status: ${entry.enabled === false ? "disabled" : "active"}`,
 		`description: ${entry.description}`,
+		...(entry.descriptionRemote ? [`description (remote): ${entry.descriptionRemote}`] : []),
 	].join("\n");
 }
 

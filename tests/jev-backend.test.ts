@@ -302,6 +302,59 @@ test("backend isolation: laya/auto never fetches; jev/auto never loads local Lay
 	assert.notEqual(remote.decision.entry.id, local.decision.entry.id, "different classifiers, independent decisions");
 });
 
+test("criteria per backend: jev/auto scores descriptionRemote, laya/auto scores description", async () => {
+	setRuntimePathsForTests({ authFile: AUTH_FILE });
+	const bodies: { questions?: { model?: { criteria?: Record<string, string> } } }[] = [];
+	setFetchForTests(async (_url, init) => {
+		bodies.push(JSON.parse(String((init as { body?: string }).body)));
+		return { ok: true, status: 200, json: async () => JEV_BODY } as never;
+	});
+	const base = mockClassifier({
+		model: { "litellm/deepseek/deepseek-v4-flash": 1 },
+		complexity: { standard: 1 },
+		category: { coding: 1 },
+	});
+	let localCriteria: Record<string, string> | null = null;
+	router.setLayaForTests({
+		config: base.config,
+		systemOne: async (input, questions) => {
+			localCriteria = (questions as { model?: { criteria?: Record<string, string> } }).model?.criteria ?? null;
+			return base.systemOne(input, questions);
+		},
+	});
+	// testConfig directly (not jevConfig, whose overrides only customize the
+	// jev section) so the models list - and with it descriptionRemote - lands.
+	const config = testConfig({
+		jev: { provider: "litellm", model: "typesafe/jev-1.13", protocol: "systemone", apiKeyEnv: "LITELLM_API_KEY" },
+		models: [{
+			provider: "litellm",
+			id: "deepseek/deepseek-v4-flash",
+			description: "short laya criterion",
+			descriptionRemote: "rich remote criterion",
+		}],
+	});
+	const ctx = makeCtx();
+	const request = routeRequest([{ role: "user", content: "Fix the flaky test." }], undefined, "user");
+	const eligible = router.eligibleModels(config, ctx.modelRegistry);
+
+	const local = await router.classifyAndDecide(request as never, ctx as never, config as never, eligible);
+	assert.equal(local.clf.provider, "local");
+	assert.equal(
+		localCriteria?.["litellm/deepseek/deepseek-v4-flash"],
+		"short laya criterion",
+		"local Laya scores the short description",
+	);
+
+	const remote = await router.classifyAndDecide(request as never, ctx as never, config as never, eligible, "jev");
+	assert.equal(remote.clf.provider, "litellm");
+	assert.equal(bodies.length, 1, "exactly one remote call");
+	assert.equal(
+		bodies[0]?.questions?.model?.criteria?.["litellm/deepseek/deepseek-v4-flash"],
+		"rich remote criterion",
+		"the remote call's criteria map carries descriptionRemote",
+	);
+});
+
 test("virtual model registration: jev/auto appears only with a jev section", () => {
 	router.setConfigForTests(testConfig());
 	assert.deepEqual(

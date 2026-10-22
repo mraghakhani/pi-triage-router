@@ -297,7 +297,14 @@ per (re)load and skipped; the router keeps working with the valid entries.
 (<= 200 chars, task-fit first; the validator flags longer ones **only when
 the classifier runs as local Laya**) so all criteria fit Laya's ~195-token
 question head. Remote backends (`"provider": "openrouter"`/`"litellm"`,
-e.g. Jev) receive the full text - longer descriptions are fine there. Pricing is **never** appended text: the
+e.g. Jev) receive the full text - longer descriptions are fine there.
+
+Each model can also carry an optional `"descriptionRemote"`: a richer
+criterion used **only when a remote backend scores the routing** (the
+`jev/auto` entry, or `laya/auto` with a remote classifier). Local Laya
+never reads it, so the short `description` still protects its head
+budget while the remote model gets the nuance. Absent → the base
+`description` is used for remote scoring too. Pricing is **never** appended text: the
 old auto-appended price line sat last in each criterion and was the first
 casualty of head truncation. Price is handled by deterministic rules instead:
 `budget`-tagged work -> cheapest eligible, escalation -> strongest eligible,
