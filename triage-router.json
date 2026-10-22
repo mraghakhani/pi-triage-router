@@ -37,14 +37,14 @@
     },
     {
       "provider": "litellm",
-      "id": "deepseek/deepseek-v4.1-flash-1017",
+      "id": "deepseek/deepseek-v4.1-flash-20261017",
       "description": "Dated snapshot of v4.1-flash; same price, same quality, pinned version.",
       "priceIn": 0.15,
       "priceOut": 0.6
     },
     {
       "provider": "litellm",
-      "id": "deepseek/deepseek-v4-pro-0813",
+      "id": "deepseek/deepseek-v4-pro-20260813",
       "description": "Long-duration deep agent runs that need sustained quality across steps.",
       "priceIn": 0.66,
       "priceOut": 1.98
@@ -94,7 +94,7 @@
       "litellm/deepseek/deepseek-v4-flash",
       "litellm/z-ai/glm-5.3-flash",
       "litellm/deepseek/deepseek-v4.1-flash",
-      "litellm/deepseek/deepseek-v4.1-flash-1017",
+      "litellm/deepseek/deepseek-v4.1-flash-20261017",
       "litellm/xiaomi/mimo-v2.6-flash"
     ],
     "standard": [
@@ -103,13 +103,13 @@
       "litellm/xiaomi/mimo-v2.6-pro"
     ],
     "premium": [
-      "litellm/deepseek/deepseek-v4-pro-0813",
+      "litellm/deepseek/deepseek-v4-pro-20260813",
       "litellm/moonshotai/kimi-k3",
       "litellm/qwen/qwen3.8-max"
     ],
     "agentic": [
       "litellm/deepseek/deepseek-v4-pro",
-      "litellm/deepseek/deepseek-v4-pro-0813",
+      "litellm/deepseek/deepseek-v4-pro-20260813",
       "litellm/xiaomi/mimo-v2.6-flash",
       "litellm/xiaomi/mimo-v2.6-pro",
       "litellm/meta/muse-spark-1.2"
