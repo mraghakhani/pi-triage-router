@@ -339,13 +339,13 @@ test("cost estimation prefers actual usage data, then context tokens, then chars
 	assert.equal(nothing.estCostIn, null, "no price + no tokens: never fabricate a cost");
 });
 
-test("cost estimation: config pins win over live registry and cached catalog prices", () => {
-	// OpenRouter catalog prices for dynamic-priced models (time-windowed
-	// snapshot overrides, e.g. DeepSeek off-peak/peak) fluctuate between
-	// refreshes; the user-declared pin is the stable reference.
+test("cost estimation: registry cost, then cached catalog price; config pin only as final fallback", () => {
+	// The refreshed catalog price is the working source; a declared
+	// priceIn/priceOut only fills ids the catalog does not price
+	// (e.g. qwen3.8-max, absent from the OpenRouter catalog).
 	const entry = { ...router.DEFAULT_MODELS[0], priceIn: 0.07, priceOut: 0.5 };
 	const registryModel = { cost: { input: 0.3, output: 1.2 } } as never;
-	const cached = { input: 0.3, output: 1.2 };
+	const cached = { input: 0.15, output: 0.6 };
 	const usage = {
 		provider: "litellm",
 		model: "deepseek/deepseek-v4-flash",
@@ -354,16 +354,11 @@ test("cost estimation: config pins win over live registry and cached catalog pri
 		cost: null,
 	};
 	const est = router.estimateCost(entry, registryModel, 1, null, usage as never, cached);
-	assert.equal(est.estCostIn, 0.07, "pin 0.07 wins over registry/cached 0.3");
-	assert.equal(est.estCostOut, 0.5, "pin 0.5 wins over registry/cached 1.2");
-	// Pinless entries fall through: live registry cost first, then the cache.
-	const pinless = { ...entry, priceIn: undefined, priceOut: undefined };
-	assert.equal(router.estimateCost(pinless, registryModel, 1, null, usage as never, cached).estCostIn, 0.3, "registry cost fills pinless");
-	assert.equal(router.estimateCost(pinless, undefined, 1, null, usage as never, cached).estCostIn, 0.3, "cache fills when registry has no cost");
-	// Partial pin: pinned field wins, unpinned field still falls through.
-	const half = router.estimateCost({ ...entry, priceOut: undefined }, registryModel, 1, null, usage as never, cached);
-	assert.equal(half.estCostIn, 0.07, "pinned input");
-	assert.equal(half.estCostOut, 1.2, "unpinned output falls to registry");
+	assert.equal(est.estCostIn, 0.3, "live registry cost wins");
+	assert.equal(est.estCostOut, 1.2, "live registry cost wins (output)");
+	assert.equal(router.estimateCost(entry, undefined, 1, null, usage as never, cached).estCostIn, 0.15, "cached catalog price next");
+	assert.equal(router.estimateCost(entry, undefined, 1, null, usage as never, undefined).estCostIn, 0.07, "config pin only when the cache has no price");
+	assert.equal(router.estimateCost(entry, undefined, 1, null, usage as never, undefined).estCostOut, 0.5, "pin fills both fields when the cache row is absent");
 });
 
 // ---------------------------------------------------------------------------

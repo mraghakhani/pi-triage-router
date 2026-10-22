@@ -1483,23 +1483,22 @@ function composite(entry: ModelEntry): string {
 	return `${entry.provider}/${entry.id}`;
 }
 
-/** Effective input price (USD/1M tokens) for routing rules. Config pins win:
- * OpenRouter catalog prices for dynamic-priced models (time-windowed
- * snapshots, e.g. DeepSeek off-peak/peak overrides) fluctuate between
- * refreshes, so a user-declared `priceIn` is the reference; the live registry
- * cost and the auto-refreshed price cache only fill models without pins. */
+/** Effective input price (USD/1M tokens) for routing rules: live registry
+ * cost, then the auto-refreshed price cache, then the config `priceIn` as the
+ * final fallback (the pin only fills ids the catalog does not price). */
 export type PriceResolver = (entry: ModelEntry) => number | undefined;
 
 /** Effective input/output prices (USD/1M tokens) for one model entry, in the
- * shared resolution order: config pin -> live registry cost -> price cache. */
+ * shared resolution order: live registry cost -> cached catalog price ->
+ * config pin. */
 function effectivePrices(
 	entry: ModelEntry,
 	registryModel: RegistryModel | undefined,
 	cachedPrice?: ModelPrice | null,
 ): { input: number | undefined; output: number | undefined } {
 	return {
-		input: entry.priceIn ?? registryModel?.cost?.input ?? cachedPrice?.input,
-		output: entry.priceOut ?? registryModel?.cost?.output ?? cachedPrice?.output,
+		input: registryModel?.cost?.input ?? cachedPrice?.input ?? entry.priceIn,
+		output: registryModel?.cost?.output ?? cachedPrice?.output ?? entry.priceOut,
 	};
 }
 
@@ -1759,7 +1758,7 @@ export function estimateCost(
 	promptChars: number,
 	contextTokens: number | null,
 	lastUsage: SessionPeek["lastUsage"],
-	/** Auto-refreshed catalog price; a config pin still wins. */
+	/** Auto-refreshed catalog price; registry cost still wins. */
 	cachedPrice?: ModelPrice | null,
 ): CostEstimate {
 	const eff = effectivePrices(entry, registryModel, cachedPrice);

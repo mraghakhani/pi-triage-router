@@ -207,12 +207,12 @@ route, and failures keep the last known good cache. A bundled snapshot
 (`triage-router.prices.json`, fetched at release time) serves reads until the
 first background refresh writes the agent-dir cache, so a fresh install has
 prices without any network wait. Lookup precedence:
-config `priceIn`/`priceOut` -> live registry cost -> cached catalog price.
-Config pins win: OpenRouter catalog prices for dynamic-priced models
-(time-windowed snapshots, e.g. DeepSeek off-peak/peak overrides) fluctuate
-between refreshes, so a declared pin is the stable reference; the live and
-cached catalog prices fill models without pins. Set
-`"prices": { "enabled": false }` to rely on pins only.
+live registry cost -> cached catalog price -> config `priceIn`/`priceOut`.
+The config pin is the final fallback, used only when the catalog does not
+price the model (renamed/withdrawn upstream). Note: OpenRouter catalog
+prices for dynamic-priced models (time-windowed snapshots, e.g. DeepSeek
+off-peak/peak overrides) fluctuate between refreshes. Set
+`"prices": { "enabled": false }` to rely on config prices only.
 per (re)load and skipped; the router keeps working with the valid entries.
 
 ```jsonc
@@ -639,7 +639,7 @@ Markdown report as a collapsible message (never plain chat text), and in
 interactive TUI mode opens the edit menu on top of it:
 
 - **Model lineup** - every configured entry with its USD/1M-token prices
-  (config `priceIn`/`priceOut` pins win over the auto-refreshed catalog price),
+  (auto-refreshed catalog price wins over the config `priceIn`/`priceOut`),
   the cached `coding` benchmark index, and its status (active/disabled).
   Picking a model shows its detail and actions: set it as the manual
   override, or enable/disable it.
