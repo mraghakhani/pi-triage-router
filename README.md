@@ -696,11 +696,18 @@ mtime-reloaded on the next route). Editable from the menu:
   `jev` section yet, the menu offers to write one; `jev/auto` registers at
   extension load, so it appears in `/models` after a restart.
   Provider and model edits are **validated before saving**: credentials
-  (env var or Pi auth file) and the model id's existence on the provider
-  (OpenRouter public catalog, or the LiteLLM proxy's model list via its
-  auth-file `baseUrl`). Definite failures deny the edit with the reason; an
-  unreachable provider (offline, proxy down) saves the edit with an
-  "unverified" warning instead of locking you out.
+  (env var or Pi auth file) and the model id's availability on the provider.
+  The provider's model list is checked first (OpenRouter public catalog, or
+  the LiteLLM proxy's model list via its auth-file `baseUrl`); when the id is
+  absent from it, the actual scoring endpoint is probed with a minimal valid
+  request - the list is not authoritative: LiteLLM proxies filter it per team
+  (a real model your key cannot access looks identical to a typo) and
+  OpenRouter's public catalog omits decision models (e.g. `typesafe/jev-*`)
+  entirely even though they serve. The probe is cached for the menu session.
+  Definite failures deny the edit with the reason (a credentials/access
+  rejection quotes the provider's message); an unreachable provider (offline,
+  proxy down) saves the edit with an "unverified" warning instead of locking
+  you out.
   The same validation runs at session startup on the saved `jev` section and
   prints problems as warnings (`[pi-triage-router] warning: ...`), including
   "could not connect to provider ..." when the provider is unreachable.

@@ -1,6 +1,9 @@
 /**
  * Remote classifier validation (jev backend): credentials + model-existence
- * checks with deny/warn levels, endpoint construction, and list caching.
+ * checks with deny/warn levels, endpoint construction, list caching, and the
+ * endpoint probe that settles ids the model list omits (LiteLLM team filters,
+ * OpenRouter decisions models). Stubs distinguish GET (list) from POST
+ * (probe) by method.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -30,6 +33,25 @@ function jsonResponse(payload: unknown, status = 200): ReturnType<FetchLike> {
 		json: () => Promise.resolve(payload),
 		text: () => Promise.resolve(JSON.stringify(payload)),
 	});
+}
+
+/** Valid minimal scoring payload the endpoint probe accepts. */
+const probeAnswers = {
+	answers: {
+		model: { probabilities: { any: 1 } },
+		complexity: { probabilities: { any: 1 } },
+		category: { probabilities: { any: 1 } },
+	},
+	usage: { input_tokens: 1, output_tokens: 1, cost: 0 },
+};
+
+/** Stub that answers the model-list GET and the scoring-endpoint POST
+ * (probe) differently. listIds without the probed id triggers a probe. */
+function listAndProbeStub(listIds: string[], probe: { status: number; payload: unknown } = { status: 200, payload: probeAnswers }) {
+	return async (url: string, init?: { method?: string }) => {
+		if (init?.method === "POST") return jsonResponse(probe.payload, probe.status);
+		return jsonResponse({ data: listIds.map((id) => ({ id })) });
+	};
 }
 
 test.afterEach(() => {
@@ -80,12 +102,68 @@ test("known model on openrouter verifies (ok)", async () => {
 	assert.deepEqual(urls, ["https://openrouter.ai/api/v1/models"]);
 });
 
-test("unknown model on openrouter denies the edit", async () => {
+test("unknown model on openrouter denies the edit (probe says does not exist)", async () => {
 	writeFileSync(authPath, JSON.stringify({ openrouter: { key: "k" } }));
-	setFetchForTests(async () => jsonResponse({ data: [{ id: "other/model" }] }));
+	setFetchForTests(
+		listAndProbeStub(["other/model"], {
+			status: 400,
+			payload: { error: { message: "Model typesafe/jev-1.14 does not exist", code: 400 } },
+		}),
+	);
 	const result = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
 	assert.equal(result.level, "problem");
 	assert.match(result.message, /model "typesafe\/jev-1\.14" not found on openrouter/);
+});
+
+test("model absent from the list but served by the endpoint verifies (probe ok)", async () => {
+	// OpenRouter's public catalog omits decision models entirely; the probe
+	// settles them. A tiny real inference call - acceptable at menu/startup.
+	writeFileSync(authPath, JSON.stringify({ openrouter: { key: "k" } }));
+	const urls: string[] = [];
+	setFetchForTests(async (url, init) => {
+		urls.push(`${init?.method ?? "GET"} ${url}`);
+		return listAndProbeStub(["other/model"], { status: 200, payload: probeAnswers })(url, init);
+	});
+	const result = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
+	assert.equal(result.level, "ok");
+	assert.match(result.message, /openrouter\/typesafe\/jev-1\.14 verified/);
+	assert.deepEqual(urls, [
+		"GET https://openrouter.ai/api/v1/models",
+		"POST https://openrouter.ai/api/v1/systemone",
+	]);
+});
+
+test("litellm team-restricted model is a problem with the truthful reason", async () => {
+	// Real-world case: the proxy's /v1/models is team-filtered, so a real model
+	// the key cannot access is absent from the list; the probe surfaces the
+	// permission rejection instead of a misleading "check the model id".
+	writeFileSync(authPath, JSON.stringify({ litellm: { key: "k", baseUrl: "http://127.0.0.1:4000" } }));
+	setFetchForTests(
+		listAndProbeStub(["typesafe/jev-1.13"], {
+			status: 400,
+			payload: { error: { message: "team not allowed to access model. This team can only access models=['qwen/qwen3.8-max']" } },
+		}),
+	);
+	const result = await checkRemoteClassifier(
+		{ ...section, provider: "litellm", model: "typesafe/jev-1.14" },
+		"jev",
+	);
+	assert.equal(result.level, "problem");
+	assert.match(result.message, /rejected model "typesafe\/jev-1\.14" for your credentials/);
+	assert.match(result.message, /routing would fail/);
+	assert.match(result.message, /team not allowed/, "the provider's rejection reason is quoted");
+});
+
+test("scoring endpoint unreachable during the probe is a warning, not a denial", async () => {
+	writeFileSync(authPath, JSON.stringify({ openrouter: { key: "k" } }));
+	setFetchForTests(async (url: string, init?: { method?: string }) => {
+		if (init?.method === "POST") throw new Error("connect ECONNREFUSED");
+		return jsonResponse({ data: [{ id: "other/model" }] });
+	});
+	const result = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
+	assert.equal(result.level, "warn");
+	assert.match(result.message, /could not reach the openrouter scoring endpoint/);
+	assert.match(result.message, /unverified/);
 });
 
 test("litellm lists models against the auth-file baseUrl with the bearer key", async () => {
@@ -127,16 +205,21 @@ test("litellm without a baseUrl in the auth file is an unverified warning", asyn
 	assert.equal(calls, 0, "no endpoint to call: the message comes from endpoint construction");
 });
 
-test("model lists are cached per provider within the TTL", async () => {
+test("model lists and probe verdicts are cached within the TTL", async () => {
 	writeFileSync(authPath, JSON.stringify({ openrouter: { key: "k" } }));
 	let calls = 0;
-	setFetchForTests(async () => {
+	const stub = listAndProbeStub(["typesafe/jev-1.13"]);
+	setFetchForTests(async (url, init) => {
 		calls++;
-		return jsonResponse({ data: [{ id: "typesafe/jev-1.13" }] });
+		return stub(url, init);
 	});
 	const first = await checkRemoteClassifier(section, "jev");
-	const second = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
 	assert.equal(first.level, "ok");
-	assert.equal(second.level, "problem", "cached list is reused, so the absent id is a definite answer");
-	assert.equal(calls, 1, "second check served from the cache");
+	assert.equal(calls, 1, "list hit: one fetch, no probe");
+	const second = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
+	assert.equal(second.level, "ok", "probe settles the id the list omits");
+	assert.equal(calls, 2, "list served from cache; probe adds one POST");
+	const third = await checkRemoteClassifier({ ...section, model: "typesafe/jev-1.14" }, "jev");
+	assert.equal(third.level, "ok");
+	assert.equal(calls, 2, "probe verdict is cached, no further calls");
 });
