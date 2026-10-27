@@ -80,6 +80,13 @@ export function resetValidationCacheForTests(): void {
 	probeCache = new Map();
 }
 
+/** Proxy for validation traffic (list GET and probe POST): explicit config
+ * value first, then Pi's settings/env fallbacks - the same resolution routing
+ * uses, so validation exercises the transport routing will actually take. */
+export function remoteProxyUrl(section: RemoteSectionLike): string | null {
+	return resolveProxyUrl(section.proxyUrl ?? null);
+}
+
 /** Model-list endpoint for a provider; null = cannot construct one. */
 export function modelsUrlFor(provider: string, baseUrl?: string | null): string | null {
 	if (provider === "openrouter") return OPENROUTER_MODELS_URL;
@@ -102,7 +109,7 @@ async function fetchModelIds(provider: string, section: RemoteSectionLike, deps:
 	try {
 		const payload = (await httpGetJson(url, {
 			timeoutMs: CHECK_TIMEOUT_MS,
-			proxyUrl: section.proxyUrl ?? null,
+			proxyUrl: remoteProxyUrl(section),
 			apiKey: apiKey || undefined,
 			fetchImpl: deps.fetchImpl,
 			maxAttempts: 1,
@@ -158,6 +165,7 @@ async function probeRemoteModel(section: RemoteSectionLike, deps: RemoteCheckDep
 	if (!apiKey) return { kind: "unreachable", detail: "no credentials" };
 	const endpoint = classifierEndpoint(section.protocol ?? "systemone", resolveBaseUrl(section.provider, section.authFile));
 	const cacheKey = `${section.provider}|${section.model}|${endpoint}`;
+	const proxyUrl = remoteProxyUrl(section);
 	const cached = probeCache.get(cacheKey);
 	if (cached && now() - cached.at < LIST_TTL_MS) return cached.verdict;
 	let verdict: ProbeVerdict;
@@ -171,7 +179,7 @@ async function probeRemoteModel(section: RemoteSectionLike, deps: RemoteCheckDep
 			maxAttempts: 1,
 			retryDelayMs: 0,
 			apiKey,
-			proxyUrl: resolveProxyUrl(section.proxyUrl ?? null),
+			proxyUrl,
 			endpoint,
 			providerLabel: section.provider,
 			fetchImpl: deps.fetchImpl,

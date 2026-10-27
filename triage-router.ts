@@ -2267,6 +2267,9 @@ async function validatedJevSave(
 		apiKeyEnv: jev ? jev.apiKeyEnv : defaultApiKeyEnv(next.provider),
 		authFile: base.authFile,
 		proxyUrl: base.proxyUrl,
+		// The probe must hit the endpoint routing will use; defaultClassifier
+		// (fresh setup) carries protocol "decisions" unless the config says otherwise.
+		protocol: base.protocol,
 	};
 	const check = await checkRemoteClassifier(section, "jev");
 	if (check.level === "problem") {

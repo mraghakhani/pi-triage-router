@@ -10,8 +10,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { setFetchForTests, type FetchLike } from "../triage-router-lib/triage-router-openrouter.ts";
-import { checkRemoteClassifier, modelsUrlFor, resetValidationCacheForTests } from "../triage-router-lib/triage-router-validation.ts";
+import { setFetchForTests, setRuntimePathsForTests, type FetchLike } from "../triage-router-lib/triage-router-openrouter.ts";
+import { checkRemoteClassifier, modelsUrlFor, remoteProxyUrl, resetValidationCacheForTests } from "../triage-router-lib/triage-router-validation.ts";
 
 const authDir = mkdtempSync(join(tmpdir(), "triage-validation-"));
 const authPath = join(authDir, "auth.json");
@@ -57,6 +57,9 @@ function listAndProbeStub(listIds: string[], probe: { status: number; payload: u
 test.afterEach(() => {
 	setFetchForTests(null);
 	resetValidationCacheForTests();
+	// The proxy-resolution test points settings.json at a temp file; restore
+	// the ambient lookup so later tests are unaffected.
+	setRuntimePathsForTests({ settingsPath: null });
 });
 
 test.after(() => {
@@ -179,6 +182,48 @@ test("litellm lists models against the auth-file baseUrl with the bearer key", a
 	assert.equal(result.level, "ok");
 	assert.equal(seenUrl, "http://127.0.0.1:4000/v1/models");
 	assert.equal(seenAuth, "Bearer secret");
+});
+
+test("the probe honors the section protocol (decisions endpoint)", async () => {
+	// The menu validates the endpoint routing will use: a protocol "decisions"
+	// section must probe /api/alpha/decisions, not the systemone default.
+	writeFileSync(authPath, JSON.stringify({ openrouter: { key: "k" } }));
+	const urls: string[] = [];
+	setFetchForTests(async (url, init) => {
+		urls.push(`${init?.method ?? "GET"} ${url}`);
+		if (init?.method === "POST") return jsonResponse(probeAnswers);
+		return jsonResponse({ data: [{ id: "other/model" }] });
+	});
+	const result = await checkRemoteClassifier(
+		{ ...section, model: "typesafe/jev-1.14", protocol: "decisions" },
+		"jev",
+	);
+	assert.equal(result.level, "ok");
+	assert.deepEqual(urls, [
+		"GET https://openrouter.ai/api/v1/models",
+		"POST https://openrouter.ai/api/alpha/decisions",
+	]);
+});
+
+test("validation proxy resolution matches routing: explicit, then settings/env fallback", () => {
+	// Neutralize ambient settings.json / env proxies so the chain is deterministic
+	// (this machine's own settings.json carries an httpProxy).
+	setRuntimePathsForTests({ settingsPath: join(authDir, "settings.json") });
+	const proxyVars = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"] as const;
+	const saved = Object.fromEntries(proxyVars.map((n) => [n, process.env[n]]));
+	try {
+		for (const n of proxyVars) delete process.env[n];
+		assert.equal(remoteProxyUrl({ ...section, proxyUrl: null }), null, "no proxy when nothing is configured");
+		process.env.https_proxy = "http://env-only:7";
+		assert.equal(remoteProxyUrl({ ...section, proxyUrl: null }), "http://env-only:7", "env fallback applies when the config value is unset");
+		assert.equal(remoteProxyUrl({ ...section, proxyUrl: "direct" }), null, "\"direct\" means never proxy");
+		assert.equal(remoteProxyUrl({ ...section, proxyUrl: "http://cfg:9" }), "http://cfg:9", "explicit config wins");
+	} finally {
+		for (const n of proxyVars) {
+			if (saved[n] === undefined) delete process.env[n];
+			else process.env[n] = saved[n];
+		}
+	}
 });
 
 test("unreachable provider is a warning, not a denial", async () => {
